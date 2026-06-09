@@ -107,6 +107,7 @@ CREATE TABLE exchange_requests (
  points_cost INTEGER NOT NULL,
  note TEXT,
  status TEXT DEFAULT 'pending',
+ viewed BOOLEAN DEFAULT false,
  date TEXT,
  created_at BIGINT,
  decided_at BIGINT,
@@ -146,53 +147,37 @@ CREATE POLICY "anon all" ON ratings FOR ALL TO anon USING (true) WITH CHECK (tru
 
 进家长端 → 点"⬆️ 推送" → 看到"✅ 推送成功" → Supabase Dashboard → Table Editor 看到数据进库。
 
-## 🌐 Vercel 部署（公网访问）
+## 🌐 Cloudflare Pages 部署（公网访问，国内可用）
 
-### 1. 注册 Vercel
+> 选 Cloudflare Pages 而非 Vercel：免费无限带宽，`*.pages.dev` 域名国内通常可访问，无需翻墙。
 
-1. 打开 https://vercel.com
-2. 用 GitHub 登录
+### 1. 注册 Cloudflare
 
-### 2. 推代码到 GitHub
+1. 打开 https://dash.cloudflare.com/sign-up
+2. 用邮箱注册（不需要信用卡）
 
-```bash
-# 项目目录
-cd pikachu-points
+### 2. 部署
 
-# 初始化 git
-git init
-git add .
-git commit -m "initial commit"
-
-# 在 GitHub 上建个新 repo（不要勾 README/.gitignore/license）
-# 然后关联 + push
-git remote add origin https://github.com/你的用户名/pikachu-points.git
-git branch -M main
-git push -u origin main
-```
-
-⚠️ **不要 commit .env 文件** —— Vercel 部署时会让你在 Web 界面配环境变量。
-
-### 3. Vercel 部署
-
-1. Vercel Dashboard → "Add New Project"
-2. Import 你的 GitHub repo
-3. Framework Preset: **Vite**（自动识别）
-4. **Environment Variables** 段，添加 2 个：
+1. Cloudflare Dashboard → **Workers & Pages** → **Create** → **Pages** → **Connect to Git**
+2. 授权 GitHub，选 `wxc705/pikachu-points` 仓库
+3. **Build settings**（自动识别 Vite，无需改）：
+   - Build command: `npm run build`
+   - Output directory: `dist`
+4. **Environment Variables** 添加 2 个：
    - `VITE_SUPABASE_URL` = `https://xxxxxx.supabase.co`
    - `VITE_SUPABASE_PUBLISHABLE_KEY` = `sb_publishable_...`
-5. 点 "Deploy"
-6. 1-2 分钟后部署完，拿到 `https://pikachu-points-xxx.vercel.app`
+5. 点 **Save and Deploy**
+6. 1-2 分钟后拿到 `https://pikachu-points.pages.dev`
 
-### 4. 跨设备访问
+### 3. 跨设备访问
 
 | 设备 | 怎么用 |
 |---|---|
-| **学习机**（13 寸安卓）| 浏览器打开 vercel.app URL → 菜单"添加到主屏幕" → PWA 全屏 |
+| **学习机**（13 寸安卓）| 浏览器打开 pages.dev URL → 菜单"添加到主屏幕" → PWA 全屏 |
 | **你的手机** | 同一个 URL → 打开家长端 → 审批 / 拨付 / 看今日数据 |
 | **爷爷奶奶家电脑** | 同一个 URL → 看孩子本周报告（家长端）|
 
-**数据自动同步**：家长端点"⬆️ 推送"→ 上传到云；学习机点"⬇️ 拉取"→ 拉到本地。**两台设备数据**通过 Supabase **共享**。
+**数据自动同步**：家长审批后**自动推送**到云 → 孩子端每 30s **自动拉取** → 无需手动操作。**两台设备数据**通过 Supabase **共享**。
 
 ## 📁 项目结构
 

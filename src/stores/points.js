@@ -84,7 +84,7 @@ export const usePointsStore = defineStore('points', () => {
  const todayCheckedProjectIds = computed(() => {
  const ids = new Set()
  for (const c of checkins.value) {
- if (c.date === today) ids.add(c.projectId)
+ if (c.date === today.value) ids.add(c.projectId)
  }
  return ids
  })
@@ -93,7 +93,7 @@ export const usePointsStore = defineStore('points', () => {
  const todayProjectCounts = computed(() => {
  const m = new Map()
  for (const c of checkins.value) {
- if (c.date !== today) continue
+ if (c.date !== today.value) continue
  m.set(c.projectId, (m.get(c.projectId) ||0) +1)
  }
  return m
@@ -109,19 +109,18 @@ export const usePointsStore = defineStore('points', () => {
 
  const totalPoints = computed(() => totalEarned.value - totalSpent.value)
 
- const today = todayStr()
- //内部用：暴露成 ref 以便外部在跨日时强制刷新
- const currentDate = ref(today)
+ const today = ref(todayStr())
+ const currentDate = today
 
  const todayEarned = computed(() =>
  checkins.value
- .filter((c) => c.date === today)
+ .filter((c) => c.date === today.value)
  .reduce((s, c) => s + (c.pointsEarned ||0),0)
  )
 
  const todaySpent = computed(() =>
  approvedRequests.value
- .filter((r) => r.date === today)
+ .filter((r) => r.date === today.value)
  .reduce((s, r) => s + (r.pointsCost ||0),0)
  )
 
@@ -131,9 +130,10 @@ export const usePointsStore = defineStore('points', () => {
  const currentStreak = computed(() => {
  if (checkins.value.length ===0) return 0
  const dates = new Set(checkins.value.map((c) => c.date))
- let cursor = new Date(today + 'T00:00:00')
+ const td = today.value
+ let cursor = new Date(td + 'T00:00:00')
  // 今天还没打卡时，从昨天开始数（保留昨日起的连胜）
- if (!dates.has(today)) {
+ if (!dates.has(td)) {
  cursor.setDate(cursor.getDate() -1)
  if (!dates.has(dateToStr(cursor))) return 0
  }
@@ -172,7 +172,7 @@ export const usePointsStore = defineStore('points', () => {
  projectName: project.name,
  category: project.category,
  pointsEarned: points,
- date: today,
+ date: today.value,
  createdAt: Date.now()
  }
  await dbAddCheckin(entry)
@@ -188,7 +188,7 @@ export const usePointsStore = defineStore('points', () => {
  pointsEarned: score,
  note,
  checkedBy: 'parent',
- date: today,
+ date: today.value,
  createdAt: Date.now()
  }
  await dbAddCheckin(entry)
@@ -205,7 +205,7 @@ export const usePointsStore = defineStore('points', () => {
  pointsEarned: points, // 可正可负
  note: '',
  checkedBy: 'parent',
- date: today,
+ date: today.value,
  createdAt: Date.now()
  }
  await dbAddCheckin(entry)
@@ -219,7 +219,8 @@ export const usePointsStore = defineStore('points', () => {
  pointsCost,
  note,
  status: 'pending',
- date: today,
+ viewed: false,
+ date: today.value,
  createdAt: Date.now()
  }
  await dbAddRequest(entry)
@@ -345,6 +346,25 @@ export const usePointsStore = defineStore('points', () => {
  lastSyncResult.value = s.lastResult
  })
  onScopeDispose(() => unsubscribeSync())
+
+ // 午夜自动刷新：每分钟检查一次，跨日自动更新 today
+ const _midnightTimer = setInterval(() => {
+ const now = todayStr()
+ if (now !== today.value) {
+ today.value = now
+ }
+ }, 60_000)
+ onScopeDispose(() => clearInterval(_midnightTimer))
+
+ // 自动拉取：每 30s 从云拉取一次（Supabase 配好后才生效）
+ const _pullTimer = setInterval(async () => {
+ if (isSyncing.value) return // 正在同步中，跳过
+ try {
+ const r = await syncPull()
+ if (r.pulled > 0) await load(true) // 有新数据则刷新 store
+ } catch (e) { /* 静默：未配 Supabase 时 pull 会抛错，忽略 */ }
+ }, 30_000)
+ onScopeDispose(() => clearInterval(_pullTimer))
 
  async function syncPushToCloud() {
  try {

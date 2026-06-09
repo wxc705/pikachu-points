@@ -1,20 +1,20 @@
 <template>
- <div class="space-y-4">
- <header class="rounded-2xl bg-surface shadow p-4 flex items-center justify-between">
+ <div class="space-y-4 animate-fade-in-up">
+    <header class="rounded-2xl text-white shadow p-4 flex items-center justify-between" style="background: linear-gradient(135deg, var(--color-primary), var(--color-accent))">
  <div>
  <h1 class="text-lg font-bold">📝 项目管理</h1>
- <p class="text-xs text-ink-soft mt-1">共 {{ store.projects.length }} 个项目</p>
+ <p class="text-xs mt-1 opacity-90">共 {{ store.projects.length }} 个项目</p>
  </div>
  <div class="flex gap-2">
  <button
  @click="filterActive = !filterActive"
- :class="['px-3 py-1 rounded-full text-xs font-medium', filterActive ? 'bg-secondary text-white' : 'bg-primary-soft text-ink']"
+ :class="['px-3 py-1 rounded-full text-xs font-medium btn-press', filterActive ? 'bg-secondary text-white' : 'bg-primary-soft text-ink']"
  >
  {{ filterActive ? '全部' : '仅启用' }}
  </button>
  <button
  @click="openCreate()"
- class="px-3 py-1 rounded-full bg-secondary text-white text-sm font-semibold"
+ class="px-3 py-1 rounded-full bg-secondary text-white text-sm font-semibold btn-press"
  >
  ＋ 新增
  </button>
@@ -24,9 +24,9 @@
  <div
  v-for="cat in categories"
  :key="cat"
- class="rounded-2xl bg-surface shadow p-4"
+ class="rounded-2xl bg-surface shadow-sm p-4 card-lift"
  >
- <h2 class="text-sm font-semibold text-ink-soft mb-2">
+ <h2 class="text-sm font-bold text-ink-soft mb-2">
  {{ CAT_META[cat]?.emoji }} {{ cat }}
  <span class="text-xs text-ink-soft font-normal">({{ visibleProjects(cat).length }})</span>
  </h2>
@@ -34,7 +34,7 @@
  <li
  v-for="p in visibleProjects(cat)"
  :key="p.id"
- class="py-2 flex items-center gap-2"
+ class="py-2 flex items-center gap-2 bg-white rounded-xl p-3 mb-1"
  :class="{ 'opacity-50': !p.isActive }"
  >
  <div class="flex-1 min-w-0">
@@ -50,7 +50,7 @@
  <button
  @click="moveSort(p, -1)"
  :disabled="!p.isActive"
- class="w-7 h-7 rounded-full bg-primary-soft text-ink-soft text-xs disabled:opacity-30"
+ class="w-7 h-7 rounded-full bg-primary-soft text-ink-soft text-xs disabled:opacity-30 btn-press"
  title="上移"
  >
  ↑
@@ -58,28 +58,28 @@
  <button
  @click="moveSort(p, 1)"
  :disabled="!p.isActive"
- class="w-7 h-7 rounded-full bg-primary-soft text-ink-soft text-xs disabled:opacity-30"
+ class="w-7 h-7 rounded-full bg-primary-soft text-ink-soft text-xs disabled:opacity-30 btn-press"
  title="下移"
  >
  ↓
  </button>
  <button
  @click="openEdit(p)"
- class="w-7 h-7 rounded-full bg-primary-soft text-secondary text-xs"
+ class="w-7 h-7 rounded-full bg-primary-soft text-secondary text-xs btn-press"
  title="编辑"
  >
  ✎
  </button>
  <button
  @click="onToggle(p)"
- :class="['w-7 h-7 rounded-full text-xs', p.isActive ? 'bg-primary-soft text-ink-soft' : 'bg-secondary text-white']"
+ :class="['w-7 h-7 rounded-full text-xs btn-press', p.isActive ? 'bg-primary-soft text-ink-soft' : 'bg-secondary text-white']"
  :title="p.isActive ? '停用' : '启用'"
  >
  {{ p.isActive ? '⏸' : '▶' }}
  </button>
  <button
  @click="onDelete(p)"
- class="w-7 h-7 rounded-full bg-primary-soft text-secondary text-xs"
+ class="w-7 h-7 rounded-full bg-primary-soft text-secondary text-xs btn-press"
  title="删除"
  >
  ✕
@@ -107,7 +107,7 @@
  v-for="cat in categories"
  :key="cat"
  @click="modal.form.category = cat"
- :class="['py-2 rounded-xl text-sm', modal.form.category === cat ? 'bg-secondary text-white font-semibold' : 'bg-primary-soft text-ink']"
+ :class="['py-2 rounded-xl text-sm btn-press', modal.form.category === cat ? 'bg-secondary text-white font-semibold' : 'bg-primary-soft text-ink']"
  >
  {{ CAT_META[cat]?.emoji }} {{ cat }}
  </button>
@@ -119,7 +119,7 @@
  <input
  v-model="modal.form.name"
  placeholder="例如：中饭准时"
- class="w-full rounded-xl border border-ink-soft px-3 py-2 text-sm focus:outline-none focus:border-primary"
+ class="w-full bg-primary-soft/50 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
  />
  </div>
 
@@ -128,13 +128,13 @@
  <div class="flex gap-2">
  <button
  @click="modal.form.mode = 'fixed'"
- :class="['flex-1 py-2 rounded-xl text-sm', modal.form.mode === 'fixed' ? 'bg-secondary text-white font-semibold' : 'bg-primary-soft text-ink']"
+ :class="['flex-1 py-2 rounded-xl text-sm btn-press', modal.form.mode === 'fixed' ? 'bg-secondary text-white font-semibold' : 'bg-primary-soft text-ink']"
  >
  固定分
  </button>
  <button
  @click="modal.form.mode = 'range'"
- :class="['flex-1 py-2 rounded-xl text-sm', modal.form.mode === 'range' ? 'bg-secondary text-white font-semibold' : 'bg-primary-soft text-ink']"
+ :class="['flex-1 py-2 rounded-xl text-sm btn-press', modal.form.mode === 'range' ? 'bg-secondary text-white font-semibold' : 'bg-primary-soft text-ink']"
  >
  范围分（家长选）
  </button>
@@ -148,7 +148,7 @@
  type="number"
  min="0"
  max="10"
- class="w-full rounded-xl border border-ink-soft px-3 py-2 text-sm focus:outline-none focus:border-primary"
+ class="w-full bg-primary-soft/50 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
  />
  </div>
  <div v-else class="grid grid-cols-2 gap-2">
@@ -159,7 +159,7 @@
  type="number"
  min="0"
  max="10"
- class="w-full rounded-xl border border-ink-soft px-3 py-2 text-sm focus:outline-none focus:border-primary"
+ class="w-full bg-primary-soft/50 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
  />
  </div>
  <div>
@@ -169,7 +169,7 @@
  type="number"
  min="0"
  max="10"
- class="w-full rounded-xl border border-ink-soft px-3 py-2 text-sm focus:outline-none focus:border-primary"
+ class="w-full bg-primary-soft/50 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
  />
  </div>
  </div>
@@ -179,7 +179,7 @@
  <input
  v-model.number="modal.form.sortOrder"
  type="number"
- class="w-full rounded-xl border border-ink-soft px-3 py-2 text-sm focus:outline-none focus:border-primary"
+ class="w-full bg-primary-soft/50 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
  />
  </div>
 
@@ -188,14 +188,14 @@
  <div class="flex gap-2">
  <button
  @click="closeModal"
- class="flex-1 py-3 rounded-2xl bg-primary-soft text-ink font-semibold"
+ class="flex-1 py-2.5 rounded-xl bg-primary-soft text-ink font-semibold btn-press"
  >
  取消
  </button>
  <button
  @click="onSave"
  :disabled="modal.saving"
- class="flex-1 py-3 rounded-2xl bg-secondary text-white font-semibold disabled:opacity-50"
+ class="flex-1 py-2.5 rounded-xl bg-secondary text-white font-semibold disabled:opacity-50 btn-press"
  >
  {{ modal.saving ? '保存中…' : (modal.editing ? '保存' : '创建') }}
  </button>
@@ -216,13 +216,13 @@
  <div class="flex gap-2">
  <button
  @click="deleteConfirm.open = false"
- class="flex-1 py-2 rounded-xl bg-primary-soft text-ink font-medium"
+ class="flex-1 py-2 rounded-xl bg-primary-soft text-ink font-medium btn-press"
  >
  取消
  </button>
  <button
  @click="confirmDelete"
- class="flex-1 py-2 rounded-xl bg-secondary text-white font-medium"
+ class="flex-1 py-2 rounded-xl bg-secondary text-white font-medium btn-press"
  >
  删除
  </button>

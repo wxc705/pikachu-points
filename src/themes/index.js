@@ -16,32 +16,30 @@ export const THEMES = [
  }
  },
  {
- id: 'minecraft',
- name: '我的世界',
- emoji: '🟩',
- description: '草方块绿，钻石蓝，泥土棕',
- colors: {
- primary: '#7eb238', // 主色 - 草方块绿
- secondary: '#8b5a2b', // 次色 - 泥土棕
- accent: '#5decf5', // 强调色 - 钻石蓝
- bg: '#a5d6e7', // 背景 - 浅天蓝
- surface: '#f4f1de' // 卡片 - 羊皮纸
- },
- disabled: true
+   id: 'minecraft',
+   name: '我的世界',
+   emoji: '🟩',
+   description: '草方块绿，钻石蓝，泥土棕',
+   colors: {
+     primary: '#7eb238',
+     secondary: '#8b5a2b',
+     accent: '#5decf5',
+     bg: '#a5d6e7',
+     surface: '#f4f1de'
+   }
  },
  {
- id: 'pikachu',
- name: '皮卡丘',
- emoji: '⚡',
- description: '黄黑主调，精灵球元素（暂未实现）',
- colors: {
- primary: '#facc15',
- secondary: '#1f2937',
- accent: '#dc2626',
- bg: '#fef9c3',
- surface: '#ffffff'
- },
- disabled: true
+   id: 'pikachu',
+   name: '皮卡丘',
+   emoji: '⚡',
+   description: '黄黑主调，精灵球元素',
+   colors: {
+     primary: '#facc15',
+     secondary: '#1f2937',
+     accent: '#dc2626',
+     bg: '#fef9c3',
+     surface: '#ffffff'
+   }
  }
 ]
 

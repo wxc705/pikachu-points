@@ -3,7 +3,7 @@
 // 当前实现：Supabase（真云端，跨设备同步）
 // 未来：可以一行 import 切到 localStorage 模式（fallback）
 
-import { getAllCheckins, getAllRequests, getProjects } from './db.js'
+import { getAllCheckins, getAllRequests, getProjects, putCheckin, putProject, putExchangeRequest } from './db.js'
 import { supabase, isSupabaseConfigured } from './supabase.js'
 
 // ---- 状态订阅 ----
@@ -78,6 +78,7 @@ export async function push() {
    points_cost: r.pointsCost,
    note: r.note,
    status: r.status,
+   viewed: r.viewed || false,
    date: r.date,
    created_at: r.createdAt,
    decided_at: r.decidedAt,
@@ -143,7 +144,6 @@ export async function pull() {
  const localRequests = await getAllRequests()
  const localProjects = await getProjects()
 
- const { putCheckin, putProject, putExchangeRequest } = await import('./db.js')
  let pulled = 0
  let merged = 0
 
@@ -151,15 +151,15 @@ export async function pull() {
  const localCheckinMap = new Map(localCheckins.map((c) => [c.id, c]))
  for (const c of (cloudCheckins || [])) {
  const row = {
- id: c.id,
- projectId: c.projectId,
- projectName: c.projectName,
- category: c.category,
- pointsEarned: c.pointsEarned,
- note: c.note,
- checkedBy: c.checkedBy,
- date: c.date,
- createdAt: c.createdAt
+   id: c.id,
+   projectId: c.project_id,
+   projectName: c.project_name,
+   category: c.category,
+   pointsEarned: c.points_earned,
+   note: c.note,
+   checkedBy: c.checked_by,
+   date: c.date,
+   createdAt: c.created_at
  }
  const existing = localCheckinMap.get(c.id)
  if (!existing) {
@@ -183,12 +183,13 @@ export async function pull() {
  const row = {
  id: r.id,
  reward: r.reward,
- pointsCost: r.pointsCost,
+ pointsCost: r.points_cost,
  note: r.note,
  status: r.status,
+ viewed: r.viewed || false,
  date: r.date,
- createdAt: r.createdAt,
- decidedAt: r.decidedAt
+ createdAt: r.created_at,
+ decidedAt: r.decided_at
  }
  const existing = localRequestMap.get(r.id)
  if (!existing) {
@@ -213,9 +214,9 @@ export async function pull() {
  category: p.category,
  name: p.name,
  points: p.points,
- pointRange: p.pointRange,
- sortOrder: p.sortOrder,
- isActive: p.isActive
+ pointRange: p.point_range,
+ sortOrder: p.sort_order,
+ isActive: p.is_active
  }
  const existing = localProjectMap.get(p.id)
  if (!existing) {

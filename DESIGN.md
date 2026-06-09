@@ -1,8 +1,8 @@
 # 皮卡丘积分管理系统 — 产品设计文档
 
-> 版本：v2.0
+> 版本：v2.1
 > 更新：2026-06-09
-> 状态：P0完成，P1/P2开发中
+> 状态：P0/P1/P2 全部完成，待云部署
 
 ---
 
@@ -455,57 +455,81 @@ pikachu-points/
 
 ### 数据库设计（Supabase/PostgreSQL）
 
+> **注意**：以下为当前实际运行的 SQL schema（与 v2.0 早期设计不同：ID 用 BIGINT 而非 UUID，方便 IndexedDB 自增 ID 做 upsert；`weekly_plan` 用 JSONB 列存 project_ids 而非多对多关联表）。
+
 ```sql
 -- 项目配置表
 CREATE TABLE projects (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  category TEXT NOT NULL,        -- 饮食/运动/学习/生活/评价
+  id BIGINT PRIMARY KEY,
+  category TEXT NOT NULL,        -- 饮食/运动/学习/生活/评价/拨付
   name TEXT NOT NULL,             -- 项目名称
-  points INTEGER NOT NULL,        -- 分值
-  point_range INT2VECTOR,         -- 分值范围 [min, max]（如学习效果1-3）
+  points INTEGER DEFAULT 0,      -- 分值
+  point_range JSONB,              -- 分值范围 [min, max]（如学习效果1-3）
   is_active BOOLEAN DEFAULT true,
   sort_order INTEGER DEFAULT 0,
-  created_at TIMESTAMPTZ DEFAULT now()
+  updated_at TIMESTAMPTZ DEFAULT now()
 );
+CREATE INDEX idx_projects_category ON projects(category);
 
--- 打卡记录表
+-- 打卡记录表（含拨付、评分的所有积分变动）
 CREATE TABLE checkins (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  project_id UUID REFERENCES projects(id),
-  points_earned INTEGER NOT NULL,
-  checked_by TEXT NOT NULL,       -- 'dad' / 'mom'
-  note TEXT,                      -- 备注
-  checked_at DATE DEFAULT CURRENT_DATE,
-  created_at TIMESTAMPTZ DEFAULT now()
+  id BIGINT PRIMARY KEY,
+  project_id BIGINT,
+  project_name TEXT,
+  category TEXT,
+  points_earned INTEGER DEFAULT 0,
+  note TEXT,
+  checked_by TEXT,               -- 'dad' / 'mom' / 'parent'
+  date TEXT,                     -- 'YYYY-MM-DD'
+  created_at BIGINT,             -- unix ms
+  updated_at TIMESTAMPTZ DEFAULT now()
 );
+CREATE INDEX idx_checkins_date ON checkins(date);
+CREATE INDEX idx_checkins_project ON checkins(project_id);
 
 -- 兑换申请表
 CREATE TABLE exchange_requests (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  description TEXT NOT NULL,      -- "看汪汪队30分钟"
-  points_cost INTEGER,            -- 扣多少分（家长确认时填）
+  id BIGINT PRIMARY KEY,
+  reward TEXT NOT NULL,
+  points_cost INTEGER NOT NULL,
+  note TEXT,
   status TEXT DEFAULT 'pending',  -- pending/approved/rejected
-  requested_at TIMESTAMPTZ DEFAULT now(),
-  reviewed_by TEXT,               -- 'dad' / 'mom'
-  reviewed_at TIMESTAMPTZ
+  date TEXT,
+  created_at BIGINT,              -- unix ms
+  decided_at BIGINT,
+  updated_at TIMESTAMPTZ DEFAULT now()
 );
+CREATE INDEX idx_exchange_status ON exchange_requests(status);
 
--- 每周学习计划表
+-- 每周学习计划表（一天一行，project_ids 存 JSON 数组）
 CREATE TABLE weekly_plan (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  day_of_week INTEGER NOT NULL,   -- 0=周日, 1=周一, 2=周二...6=周六
-  project_id UUID NOT NULL REFERENCES projects(id),
-  sort_order INTEGER DEFAULT 0,
-  created_at TIMESTAMPTZ DEFAULT now(),
-  UNIQUE(day_of_week, project_id)  -- 同一天同一项目不能重复
+  weekday INTEGER PRIMARY KEY CHECK (weekday BETWEEN 1 AND 7),
+  project_ids JSONB NOT NULL DEFAULT '[]'::jsonb,
+  updated_at TIMESTAMPTZ DEFAULT now()
 );
 
--- 积分汇总视图
-CREATE VIEW total_points AS
-SELECT COALESCE(SUM(points_earned), 0) as earned,
-       COALESCE((SELECT SUM(points_cost) FROM exchange_requests WHERE status = 'approved'), 0) as spent,
-       COALESCE(SUM(points_earned), 0) - COALESCE((SELECT SUM(points_cost) FROM exchange_requests WHERE status = 'approved'), 0) as balance
-FROM checkins;
+-- 学习效果评分表
+CREATE TABLE ratings (
+  id BIGINT PRIMARY KEY,
+  score INTEGER,
+  note TEXT,
+  date TEXT,
+  created_at BIGINT,
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- RLS 策略（当前为单用户家庭场景，全部允许）
+ALTER TABLE projects ENABLE ROW LEVEL SECURITY;
+ALTER TABLE checkins ENABLE ROW LEVEL SECURITY;
+ALTER TABLE exchange_requests ENABLE ROW LEVEL SECURITY;
+ALTER TABLE weekly_plan ENABLE ROW LEVEL SECURITY;
+ALTER TABLE ratings ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "anon all" ON projects FOR ALL TO anon USING (true) WITH CHECK (true);
+CREATE POLICY "anon all" ON checkins FOR ALL TO anon USING (true) WITH CHECK (true);
+CREATE POLICY "anon all" ON exchange_requests FOR ALL TO anon USING (true) WITH CHECK (true);
+CREATE POLICY "anon all" ON weekly_plan FOR ALL TO anon USING (true) WITH CHECK (true);
+CREATE POLICY "anon all" ON ratings FOR ALL TO anon USING (true) WITH CHECK (true);
 ```
 
 ### 主题系统
@@ -624,49 +648,63 @@ FROM checkins;
 5. 本地存储（IndexedDB）
 6. 种子数据（默认项目）
 
-### P1（体验优化）🔄 进行中
+### P1（体验优化）✅ 已完成
 7. 金币飞出动画 ✅
 8. 奥特曼变身特效 ✅
 9. 里程碑动画 ✅
 10. 连续打卡徽章 ✅
 11. 每周统计报告 ✅
-12. 设置页面（主题切换）✅
+12. 设置页面（主题切换，3 套主题）✅
 13. 学习效果评分 ✅
 14. 家长端专属页面 ✅
 15. 项目管理 ✅
-16. 每周学习计划（按星期配置）❌ 待开发
+16. 每周学习计划（按星期配置）✅
 
-### P2（锦上添花）⏳ 待开发
-17. 奥特曼5级特效（素材已到位）❌ 待开发
-18. 音效集成（音效文件已到位）❌ 待开发
-19. Supabase云同步
-20. PWA配置（框架已就绪）
-21. 图标系统（Lucide Icons）
+### P2（锦上添花）✅ 已完成
+17. 奥特曼5级特效（素材已到位，UltramanEffect.vue 实现）✅
+18. 音效集成（wav 文件 + Web Audio 合成回退）✅
+19. Supabase 云同步（推送/拉取/双向）✅
+20. PWA 配置（vite-plugin-pwa，离线可用）✅
+21. 图标系统（Lucide Icons，替代 emoji）✅
+
+### 额外实现（设计文档未列但已交付）
+22. 拨付积分（家长手动加减分，category='拨付'）✅
+23. 云同步面板（推送/拉取/同步 三按钮）✅
+24. 主题系统：3 套（奥特曼/我的世界/皮卡丘），后两套待启用 ✅
+
+### 待部署
+- Vercel 公网部署
+- Supabase 建表 + RLS 策略
+- 学习机 PWA 安装
 
 ---
 
 ## 九、部署流程
 
-### 云托管部署（Vercel + Supabase）
+### 云托管部署（Cloudflare Pages + Supabase）
+
+> 选 Cloudflare Pages：`*.pages.dev` 域名国内可访问，免费无限带宽，无需翻墙。
 
 **步骤1：注册账号**
-- Vercel：https://vercel.com（GitHub登录）
-- Supabase：https://supabase.com（GitHub登录）
+- Cloudflare：https://dash.cloudflare.com/sign-up（邮箱注册，不需信用卡）
+- Supabase：https://supabase.com（GitHub 登录）
 
-**步骤2：配置Supabase**
+**步骤2：配置 Supabase**
 - 创建项目 `pikachu-points`
-- 选择新加坡区域
-- 执行 `schema.sql` 创建表结构
+- 选择 Singapore 区域
+- 在 SQL Editor 执行建表 SQL（见 README.md）
 
-**步骤3：部署到Vercel**
-- 连接GitHub仓库
-- 配置环境变量（Supabase URL + Key）
-- 自动部署
+**步骤3：部署到 Cloudflare Pages**
+- Workers & Pages → Create → Pages → Connect to Git
+- 选 GitHub 仓库，Framework 自动识别 Vite
+- Build: `npm run build` / Output: `dist`
+- 环境变量：`VITE_SUPABASE_URL` + `VITE_SUPABASE_PUBLISHABLE_KEY`
+- 自动部署，拿到 `https://pikachu-points.pages.dev`
 
 **步骤4：学习机使用**
-- 打开浏览器访问 `pikachu-points.vercel.app`
-- 收藏到书签
-- 可选：添加到主屏幕（PWA）
+- 浏览器打开 `https://pikachu-points.pages.dev`
+- 菜单 → "添加到主屏幕" → PWA 全屏模式
+- 数据自动同步（家长审批自动推，孩子端 30s 自动拉）
 
 ---
 
@@ -690,4 +728,4 @@ FROM checkins;
 
 ---
 
-*设计完成，CC已实现P0+P1核心功能，待云托管部署。*
+*设计文档 v2.1，代码已交付 P0+P1+P2 全部功能，待云托管部署。*

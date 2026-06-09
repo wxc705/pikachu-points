@@ -1,8 +1,8 @@
 <template>
- <div class="space-y-4">
- <header class="rounded-2xl bg-surface shadow p-4">
+ <div class="space-y-4 animate-fade-in-up">
+    <header class="rounded-2xl text-white shadow p-4" style="background: linear-gradient(135deg, var(--color-primary), var(--color-accent))">
  <h1 class="text-lg font-bold">📅 每周学习计划</h1>
- <p class="text-xs text-ink-soft mt-1">为每天配推荐项目，孩子在打卡页会看到"今日推荐"</p>
+ <p class="text-xs mt-1 opacity-90">为每天配推荐项目，孩子在打卡页会看到"今日推荐"</p>
  </header>
 
  <!-- weekday tabs -->
@@ -12,7 +12,7 @@
  :key="d.n"
  @click="activeWeekday = d.n"
  :class="[
-  'px-3 py-2 rounded-full text-sm font-medium shrink-0 transition',
+  'px-3 py-2.5 rounded-full text-sm font-medium shrink-0 transition btn-press',
   activeWeekday === d.n
  ? 'bg-primary text-ink shadow'
  : 'bg-surface text-ink-soft hover:bg-primary-soft'
@@ -23,9 +23,9 @@
  </div>
 
  <!-- 当前日 panel -->
- <section class="rounded-2xl bg-surface shadow p-4 space-y-3">
+ <section class="rounded-2xl bg-surface shadow-sm p-4 space-y-3 card-lift">
  <div class="flex items-center justify-between">
- <h2 class="font-semibold">
+ <h2 class="font-bold">
  {{ currentWeekday.emoji }} {{ currentWeekday.long }}
  <span class="text-xs text-ink-soft ml-1">({{ recommendedProjects.length }} 项)</span>
  </h2>
@@ -46,7 +46,7 @@
  <label
  v-for="p in store.projects"
  :key="p.id"
- class="flex items-center gap-2 p-2 rounded-lg cursor-pointer hover:bg-primary-soft"
+ class="flex items-center gap-2 p-3 rounded-xl cursor-pointer hover:bg-primary-soft bg-white"
  :class="selectedIds.has(p.id) ? 'bg-primary-soft' : ''"
  >
  <input
@@ -69,7 +69,7 @@
  <button
  @click="onSave"
  :disabled="saving"
- class="flex-1 rounded-full bg-primary hover:bg-primary-soft text-ink font-semibold py-2 text-sm disabled:opacity-50"
+ class="flex-1 rounded-xl bg-primary hover:bg-primary-soft text-ink font-semibold py-2.5 text-sm disabled:opacity-50 btn-press"
  >
  {{ saving ? '保存中…' : '保存' }}
  </button>
@@ -78,8 +78,8 @@
  </section>
 
  <!-- 一周概览 -->
- <section class="rounded-2xl bg-surface shadow p-4">
- <h3 class="font-semibold text-sm mb-2">📋 本周已配置 ({{ configuredCount }}/7)</h3>
+ <section class="rounded-2xl bg-surface shadow-sm p-4 card-lift">
+      <h3 class="font-bold text-sm mb-2">📋 本周已配置 ({{ configuredCount }}/7)</h3>
  <div class="grid grid-cols-7 gap-1">
  <div
  v-for="d in WEEKDAYS"
@@ -101,6 +101,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { usePointsStore } from '../stores/points.js'
 import { WEEKDAYS } from '../utils/weekday.js'
+import { categoryEmoji } from '../utils/emoji.js'
 import { playCoin } from '../services/sound.js'
 
 const store = usePointsStore()
@@ -129,10 +130,6 @@ function getPlan(weekday) {
 const configuredCount = computed(() =>
  store.weeklyPlans.filter((w) => w.projectIds && w.projectIds.length > 0).length
 )
-
-function categoryEmoji(cat) {
- return { 饮食: '🍚', 运动: '🏃', 学习: '📚', 生活: '🧹', 评价: '⭐' }[cat] || '📌'
-}
 
 // 切到某日时，load 已有计划
 function loadFor(weekday) {

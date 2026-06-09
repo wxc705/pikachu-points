@@ -1,6 +1,6 @@
 <template>
- <div class="space-y-4">
- <header class="rounded-2xl bg-gradient-to-br from-purple-500 to-pink-500 text-white shadow p-5">
+ <div class="space-y-4 animate-fade-in-up">
+    <header class="rounded-2xl text-white shadow p-5" style="background: linear-gradient(135deg, var(--color-primary), var(--color-accent))">
  <h1 class="text-xl font-bold">📊 本周积分报告</h1>
  <p class="text-sm mt-1 opacity-90">{{ rangeLabel }}</p>
  </header>
@@ -9,16 +9,16 @@
  <button
  @click="generate"
  :disabled="loading"
- class="rounded-2xl bg-primary hover:bg-primary-soft disabled:bg-primary-soft text-ink font-semibold py-3"
+ class="rounded-xl bg-primary hover:bg-primary-soft disabled:bg-primary-soft text-ink font-semibold py-2.5 btn-press"
  >
  {{ loading ? '生成中…' : (report ? '🔄 重新生成' : '📊 生成报告') }}
  </button>
  <button
  @click="exportImage"
  :disabled="!report || exporting"
- class="rounded-2xl bg-secondary hover:opacity-90 disabled:opacity-50 text-white font-semibold py-3"
- >
- {{ exporting ? '导出中…' : '📷 导出 PNG' }}
+ class="rounded-xl bg-secondary hover:opacity-90 disabled:opacity-50 text-white font-semibold py-2.5 btn-press"
+      >
+        {{ exporting ? '导出中…' : '📷 导出 PNG' }}
  </button>
  </div>
 
@@ -26,8 +26,8 @@
 
  <div v-if="report" ref="reportEl" class="space-y-3">
  <!-- 总览 -->
- <section class="rounded-2xl bg-surface shadow p-5">
- <h2 class="text-sm font-semibold text-ink-soft mb-3">总览</h2>
+ <section class="rounded-2xl bg-surface shadow-sm p-5 card-lift">
+ <h2 class="text-sm font-bold text-ink-soft mb-3">总览</h2>
  <div class="grid grid-cols-3 gap-3 text-center">
  <div>
  <p class="text-xs text-ink-soft">本周新增</p>
@@ -47,8 +47,8 @@
  </section>
 
  <!-- 7 天柱状图 -->
- <section v-if="report.dailyBars.length" class="rounded-2xl bg-surface shadow p-5">
- <h2 class="text-sm font-semibold text-ink-soft mb-3">📊 每日积分</h2>
+ <section v-if="report.dailyBars.length" class="rounded-2xl bg-surface shadow-sm p-5 card-lift">
+ <h2 class="text-sm font-bold text-ink-soft mb-3">📊 每日积分</h2>
  <div class="flex items-end justify-between gap-1" :style="{ height: '120px' }">
  <div
  v-for="day in report.dailyBars"
@@ -72,8 +72,8 @@
  </section>
 
  <!-- 7 天打卡日历 -->
- <section v-if="report.weeklyCells.length" class="rounded-2xl bg-surface shadow p-5">
- <h2 class="text-sm font-semibold text-ink-soft mb-3">📅 打卡日历</h2>
+ <section v-if="report.weeklyCells.length" class="rounded-2xl bg-surface shadow-sm p-5 card-lift">
+ <h2 class="text-sm font-bold text-ink-soft mb-3">📅 打卡日历</h2>
  <div class="grid grid-cols-7 gap-2">
  <div
  v-for="cell in report.weeklyCells"
@@ -100,8 +100,8 @@
  </section>
 
  <!-- 分类打卡率 -->
- <section v-if="report.categoryRates.length" class="rounded-2xl bg-surface shadow p-5">
- <h2 class="text-sm font-semibold text-ink-soft mb-3">🎯 分类打卡率</h2>
+ <section v-if="report.categoryRates.length" class="rounded-2xl bg-surface shadow-sm p-5 card-lift">
+ <h2 class="text-sm font-bold text-ink-soft mb-3">🎯 分类打卡率</h2>
  <ul class="space-y-3">
  <li v-for="row in report.categoryRates" :key="row.category">
  <div class="flex items-center justify-between text-sm mb-1">
@@ -122,8 +122,8 @@
  </section>
 
  <!-- 分类统计 -->
- <section class="rounded-2xl bg-surface shadow p-5">
- <h2 class="text-sm font-semibold text-ink-soft mb-3">分类统计</h2>
+ <section class="rounded-2xl bg-surface shadow-sm p-5 card-lift">
+ <h2 class="text-sm font-bold text-ink-soft mb-3">分类统计</h2>
  <ul class="space-y-2">
  <li
  v-for="row in report.categoryRows"
@@ -142,8 +142,8 @@
  </section>
 
  <!-- 本周最佳 -->
- <section v-if="report.topProject" class="rounded-2xl bg-surface shadow p-5">
- <h2 class="text-sm font-semibold text-ink-soft mb-2">🏆 本周最佳</h2>
+ <section v-if="report.topProject" class="rounded-2xl bg-surface shadow-sm p-5 card-lift">
+ <h2 class="text-sm font-bold text-ink-soft mb-2">🏆 本周最佳</h2>
  <p class="text-lg font-bold">
  {{ report.topProject.name }}
  <span class="text-sm text-ink-soft font-normal">
@@ -153,8 +153,8 @@
  </section>
 
  <!-- 学习效果平均分 -->
- <section v-if="report.ratingAvg !== null" class="rounded-2xl bg-surface shadow p-5">
- <h2 class="text-sm font-semibold text-ink-soft mb-2">📈 学习效果平均</h2>
+ <section v-if="report.ratingAvg !== null" class="rounded-2xl bg-surface shadow-sm p-5 card-lift">
+ <h2 class="text-sm font-bold text-ink-soft mb-2">📈 学习效果平均</h2>
  <p class="text-2xl font-bold text-secondary">
  {{ report.ratingAvg.toFixed(1) }} / 3
  <span class="text-sm text-ink-soft font-normal">({{ report.ratingCount }}次评分)</span>
@@ -162,8 +162,8 @@
  </section>
 
  <!-- 连续打卡项目 -->
- <section v-if="report.projectStreaks.length" class="rounded-2xl bg-surface shadow p-5">
- <h2 class="text-sm font-semibold text-ink-soft mb-3">🔥 本周连续打卡</h2>
+ <section v-if="report.projectStreaks.length" class="rounded-2xl bg-surface shadow-sm p-5 card-lift">
+ <h2 class="text-sm font-bold text-ink-soft mb-3">🔥 本周连续打卡</h2>
  <ul class="space-y-1 text-sm">
  <li v-for="ps in report.projectStreaks" :key="ps.name">
  {{ ps.name }} <span class="text-ink-soft">连续 {{ ps.streak }} 天</span>
@@ -172,14 +172,14 @@
  </section>
 
  <!-- 建议 -->
- <section v-if="report.suggestion" class="rounded-2xl bg-primary-soft border border-primary p-4">
+ <section v-if="report.suggestion" class="rounded-2xl bg-primary-soft border border-primary p-4 card-lift">
  <p class="text-sm">💡 {{ report.suggestion }}</p>
  </section>
 
  <!-- 复制按钮 -->
  <button
  @click="copyReport"
- class="w-full rounded-2xl bg-secondary hover:opacity-90 text-white font-semibold py-3"
+ class="w-full rounded-xl bg-secondary hover:opacity-90 text-white font-semibold py-2.5 btn-press"
  >
  📋 复制报告到剪贴板
  </button>
