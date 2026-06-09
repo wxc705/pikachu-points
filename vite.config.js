@@ -2,10 +2,10 @@ import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import { VitePWA } from 'vite-plugin-pwa'
 
+import { cloudflare } from "@cloudflare/vite-plugin";
+
 export default defineConfig({
- plugins: [
- vue(),
- VitePWA({
+ plugins: [vue(), VitePWA({
  registerType: 'autoUpdate',
  includeAssets: ['favicon.png', 'apple-touch-icon.png', 'pwa-192x192.png', 'pwa-512x512.png'],
  manifest: {
@@ -32,7 +32,6 @@ export default defineConfig({
  devOptions: {
  enabled: false
  }
- })
- ],
+ }), cloudflare()],
  base: './'
 })
