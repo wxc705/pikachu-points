@@ -1,0 +1,20 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html, body, #app {
+ height:100%;
+}
+
+/* 主题 CSS 变量 —— 运行时由 themes/index.js 注入
+ 默认值（奥特曼主题） */
+:root {
+ --color-primary: #fde047;
+ --color-primary-soft: #fef9c3;
+ --color-secondary: #dc2626;
+ --color-accent: #0ea5e9;
+ --color-bg: #fef9c3;
+ --color-surface: #ffffff;
+ --color-ink: #1f2937;
+ --color-ink-soft: #6b7280;
+}
