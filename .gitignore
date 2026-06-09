@@ -40,3 +40,9 @@ dev-dist/
 
 # 测试文件（开发临时）
 public/test-*.html
+
+# wrangler files
+.wrangler
+.dev.vars*
+!.dev.vars.example
+!.env.example
