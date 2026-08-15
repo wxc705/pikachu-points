@@ -3,7 +3,7 @@
 // 当前实现：Supabase（真云端，跨设备同步）
 // 未来：可以一行 import 切到 localStorage 模式（fallback）
 
-import { getAllCheckins, getAllRequests, getProjects, putCheckin, putProject, putExchangeRequest } from './db.js'
+import { getAllCheckins, getAllRequests, getProjects, putCheckin, putProject, putExchangeRequest, getAllWeeklyPlans, setWeeklyPlan } from './db.js'
 import { supabase, isSupabaseConfigured } from './supabase.js'
 
 // ---- 状态订阅 ----
@@ -46,10 +46,11 @@ export async function push() {
  state.lastError = null
  notify()
  try {
- const [checkins, requests, projects] = await Promise.all([
+ const [checkins, requests, projects, weeklyPlans] = await Promise.all([
  getAllCheckins(),
  getAllRequests(),
- getProjects()
+ getProjects(),
+ getAllWeeklyPlans()
  ])
 
  let pushed = 0
@@ -99,9 +100,19 @@ export async function push() {
    sort_order: p.sortOrder,
    is_active: p.isActive,
    id: p.id,
-   updated_at: nowIso()
+   updated_at: p.updatedAt ? new Date(p.updatedAt).toISOString() : nowIso()
  }))
  const { error } = await supabase.from('projects').upsert(rows, { onConflict: 'id' })
+ if (error) throw error
+ pushed += rows.length
+ }
+ // weekly_plan
+ if (weeklyPlans.length) {
+ const rows = weeklyPlans.map((w) => ({
+   weekday: w.weekday,
+   project_ids: w.projectIds
+ }))
+ const { error } = await supabase.from('weekly_plan').upsert(rows, { onConflict: 'weekday' })
  if (error) throw error
  pushed += rows.length
  }
@@ -131,14 +142,16 @@ export async function pull() {
  state.lastError = null
  notify()
  try {
- const [{ data: cloudCheckins, error: e1 }, { data: cloudRequests, error: e2 }, { data: cloudProjects, error: e3 }] = await Promise.all([
+ const [{ data: cloudCheckins, error: e1 }, { data: cloudRequests, error: e2 }, { data: cloudProjects, error: e3 }, { data: cloudWeeklyPlans, error: e4 }] = await Promise.all([
  supabase.from('checkins').select('*'),
  supabase.from('exchange_requests').select('*'),
- supabase.from('projects').select('*')
+ supabase.from('projects').select('*'),
+ supabase.from('weekly_plan').select('*')
  ])
  if (e1) throw e1
  if (e2) throw e2
  if (e3) throw e3
+ if (e4) throw e4
 
  const localCheckins = await getAllCheckins()
  const localRequests = await getAllRequests()
@@ -206,27 +219,40 @@ export async function pull() {
  }
 
  // ---- projects 合并 ----
- // projects 是家长配置（不是数据），冲突时云端优先（家长最后配置赢）
+ // projects 是家长配置，用 updatedAt 做 last-write-wins（避免同步顺序把本地改动覆盖）
  const localProjectMap = new Map(localProjects.map((p) => [p.id, p]))
  for (const p of (cloudProjects || [])) {
  const row = {
- id: p.id,
- category: p.category,
- name: p.name,
- points: p.points,
- pointRange: p.point_range,
- sortOrder: p.sort_order,
- isActive: p.is_active
+   id: p.id,
+   category: p.category,
+   name: p.name,
+   points: p.points,
+   pointRange: p.point_range,
+   sortOrder: p.sort_order,
+   isActive: p.is_active,
+   updatedAt: p.updated_at ? new Date(p.updated_at).getTime() : 0
  }
  const existing = localProjectMap.get(p.id)
  if (!existing) {
  await putProject(row)
  pulled++
  } else {
- // projects 任何时候云端优先（家长配置可能改了）
- await putProject(row)
- merged++
+   // last-write-wins：云端 updatedAt 较新才覆盖本地
+   const eTs = existing.updatedAt || 0
+   const cTs = row.updatedAt || 0
+   if (cTs > eTs) {
+     await putProject(row)
+     merged++
+   }
+   // else: 本地较新，保留（下次 push 传上去）
  }
+ }
+
+ // ---- weekly_plan 合并 ----
+ // weekly_plan 是家长配置，云端优先，无需 LWW 比较
+ for (const w of (cloudWeeklyPlans || [])) {
+ await setWeeklyPlan(w.weekday, w.project_ids)
+ pulled++
  }
 
  const ts = nowIso()

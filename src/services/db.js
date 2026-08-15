@@ -46,7 +46,7 @@ export async function openDB() {
 // ----- projects -----
 export async function addProject(project) {
  const db = await openDB()
- return db.add('projects', project)
+ return db.add('projects', { ...project, updatedAt: Date.now() })
 }
 
 export async function updateProject(id, patch) {
@@ -58,7 +58,7 @@ export async function updateProject(id, patch) {
  await tx.done
  return null
  }
- const next = { ...existing, ...patch, id }
+ const next = { ...existing, ...patch, id, updatedAt: Date.now() }
  await store.put(next)
  await tx.done
  return next
