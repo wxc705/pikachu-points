@@ -9,6 +9,7 @@ import ParentDashboard from './views/ParentDashboard.vue'
 import ProjectManage from './views/ProjectManage.vue'
 import Settings from './views/Settings.vue'
 import WeeklyPlan from './views/WeeklyPlan.vue'
+import KidHome from './kid/KidHome.vue'
 
 const routes = [
  { path: '/', name: 'home', component: Home },
@@ -20,7 +21,8 @@ const routes = [
  { path: '/parent', name: 'parent', component: ParentDashboard },
  { path: '/projects', name: 'projects', component: ProjectManage },
  { path: '/settings', name: 'settings', component: Settings },
- { path: '/weekly-plan', name: 'weekly-plan', component: WeeklyPlan }
+ { path: '/weekly-plan', name: 'weekly-plan', component: WeeklyPlan },
+ { path: '/kid', name: 'kid', component: KidHome }
 ]
 
 const router = createRouter({
