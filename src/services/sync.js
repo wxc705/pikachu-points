@@ -54,81 +54,95 @@ export async function push() {
  ])
 
  let pushed = 0
+ const errors = []
+ // 逐表 upsert，失败不连坐其他表：一张表报错（如表不存在/字段不匹配）只记错误，
+ // 已成功的表照常写入云端，最后汇总抛出（UI 能显示具体哪张表、为什么失败）
  // checkins
  if (checkins.length) {
- const rows = checkins.map((c) => ({
-   project_id: c.projectId,
-   project_name: c.projectName,
-   category: c.category,
-   points_earned: c.pointsEarned,
-   note: c.note,
-   checked_by: c.checkedBy,
-   date: c.date,
-   created_at: c.createdAt,
-   id: c.id,
-   updated_at: nowIso()
- }))
- const { error } = await supabase.from('checkins').upsert(rows, { onConflict: 'id' })
- if (error) throw error
- pushed += rows.length
+   const rows = checkins.map((c) => ({
+     project_id: c.projectId,
+     project_name: c.projectName,
+     category: c.category,
+     points_earned: c.pointsEarned,
+     note: c.note,
+     checked_by: c.checkedBy,
+     date: c.date,
+     created_at: c.createdAt,
+     id: c.id,
+     updated_at: nowIso()
+   }))
+   try {
+     const { error } = await supabase.from('checkins').upsert(rows, { onConflict: 'id' })
+     if (error) throw error
+     pushed += rows.length
+   } catch (e) { errors.push({ table: 'checkins', error: e.message || String(e) }) }
  }
  // exchange_requests
  if (requests.length) {
- const rows = requests.map((r) => ({
-   reward: r.reward,
-   points_cost: r.pointsCost,
-   note: r.note,
-   status: r.status,
-   viewed: r.viewed || false,
-   date: r.date,
-   created_at: r.createdAt,
-   decided_at: r.decidedAt,
-   id: r.id,
-   updated_at: nowIso()
- }))
- const { error } = await supabase.from('exchange_requests').upsert(rows, { onConflict: 'id' })
- if (error) throw error
- pushed += rows.length
+   const rows = requests.map((r) => ({
+     reward: r.reward,
+     points_cost: r.pointsCost,
+     note: r.note,
+     status: r.status,
+     viewed: r.viewed || false,
+     date: r.date,
+     created_at: r.createdAt,
+     decided_at: r.decidedAt,
+     id: r.id,
+     updated_at: nowIso()
+   }))
+   try {
+     const { error } = await supabase.from('exchange_requests').upsert(rows, { onConflict: 'id' })
+     if (error) throw error
+     pushed += rows.length
+   } catch (e) { errors.push({ table: 'exchange_requests', error: e.message || String(e) }) }
  }
  // projects
  if (projects.length) {
- const rows = projects.map((p) => ({
-   category: p.category,
-   name: p.name,
-   points: p.points,
-   point_range: p.pointRange,
-   sort_order: p.sortOrder,
-   is_active: p.isActive,
-   id: p.id,
-   updated_at: p.updatedAt ? new Date(p.updatedAt).toISOString() : nowIso()
- }))
- const { error } = await supabase.from('projects').upsert(rows, { onConflict: 'id' })
- if (error) throw error
- pushed += rows.length
+   const rows = projects.map((p) => ({
+     category: p.category,
+     name: p.name,
+     points: p.points,
+     point_range: p.pointRange,
+     sort_order: p.sortOrder,
+     is_active: p.isActive,
+     id: p.id,
+     updated_at: p.updatedAt ? new Date(p.updatedAt).toISOString() : nowIso()
+   }))
+   try {
+     const { error } = await supabase.from('projects').upsert(rows, { onConflict: 'id' })
+     if (error) throw error
+     pushed += rows.length
+   } catch (e) { errors.push({ table: 'projects', error: e.message || String(e) }) }
  }
  // weekly_plan
  if (weeklyPlans.length) {
- const rows = weeklyPlans.map((w) => ({
-   weekday: w.weekday,
-   project_ids: w.projectIds
- }))
- const { error } = await supabase.from('weekly_plan').upsert(rows, { onConflict: 'weekday' })
- if (error) throw error
- pushed += rows.length
+   const rows = weeklyPlans.map((w) => ({
+     weekday: w.weekday,
+     project_ids: w.projectIds
+   }))
+   try {
+     const { error } = await supabase.from('weekly_plan').upsert(rows, { onConflict: 'weekday' })
+     if (error) throw error
+     pushed += rows.length
+   } catch (e) { errors.push({ table: 'weekly_plan', error: e.message || String(e) }) }
  }
 
  const ts = nowIso()
  state.lastSyncedAt = ts
- state.lastResult = { pushed, pulled: 0, lastSyncedAt: ts }
+ state.lastResult = { pushed, pulled: 0, errors, lastSyncedAt: ts }
+ // 部分表失败不 throw：返回完整结果（含 errors），UI 显示"部分推送 + 具体失败表"
+ // 核心数据（打卡/兑换）已成功写入云端，不应被一张失败的表连坐
+ state.lastError = errors.length ? errors.map((x) => `${x.table}: ${x.error}`).join(' | ') : null
  return state.lastResult
- } catch (e) {
+} catch (e) {
  state.lastError = e.message || String(e)
  state.lastResult = { pushed: 0, pulled: 0, error: state.lastError }
  throw e
- } finally {
+} finally {
  state.isSyncing = false
  notify()
- }
+}
 }
 
 // pull: 从云拉取，按 createdAt 合并（last-write-wins）
@@ -142,16 +156,23 @@ export async function pull() {
  state.lastError = null
  notify()
  try {
- const [{ data: cloudCheckins, error: e1 }, { data: cloudRequests, error: e2 }, { data: cloudProjects, error: e3 }, { data: cloudWeeklyPlans, error: e4 }] = await Promise.all([
- supabase.from('checkins').select('*'),
- supabase.from('exchange_requests').select('*'),
- supabase.from('projects').select('*'),
- supabase.from('weekly_plan').select('*')
+ // 逐表拉取，表不存在/无权访问只记错误，不连坐其他表（核心打卡/兑换数据优先）
+ const pullErrors = []
+ const [cr, rr, pr, wr] = await Promise.allSettled([
+   supabase.from('checkins').select('*'),
+   supabase.from('exchange_requests').select('*'),
+   supabase.from('projects').select('*'),
+   supabase.from('weekly_plan').select('*')
  ])
- if (e1) throw e1
- if (e2) throw e2
- if (e3) throw e3
- if (e4) throw e4
+ const cloudCheckins = cr.status === 'fulfilled' && !cr.value.error ? cr.value.data : null
+ if (cr.status === 'rejected' || (cr.value && cr.value.error)) pullErrors.push({ table: 'checkins', error: cr.status === 'rejected' ? cr.reason.message : cr.value.error.message })
+ const cloudRequests = rr.status === 'fulfilled' && !rr.value.error ? rr.value.data : null
+ if (rr.status === 'rejected' || (rr.value && rr.value.error)) pullErrors.push({ table: 'exchange_requests', error: rr.status === 'rejected' ? rr.reason.message : rr.value.error.message })
+ const cloudProjects = pr.status === 'fulfilled' && !pr.value.error ? pr.value.data : null
+ if (pr.status === 'rejected' || (pr.value && pr.value.error)) pullErrors.push({ table: 'projects', error: pr.status === 'rejected' ? pr.reason.message : pr.value.error.message })
+ const cloudWeeklyPlans = wr.status === 'fulfilled' && !wr.value.error ? wr.value.data : null
+ if (wr.status === 'rejected' || (wr.value && wr.value.error)) pullErrors.push({ table: 'weekly_plan', error: wr.status === 'rejected' ? wr.reason.message : wr.value.error.message })
+ if (pullErrors.length) state.lastError = pullErrors.map((x) => `${x.table}: ${x.error}`).join(' | ')
 
  const localCheckins = await getAllCheckins()
  const localRequests = await getAllRequests()
@@ -257,26 +278,28 @@ export async function pull() {
 
  const ts = nowIso()
  state.lastSyncedAt = ts
- state.lastResult = { pushed: 0, pulled, merged, lastSyncedAt: ts }
+ state.lastResult = { pushed: 0, pulled, merged, errors: pullErrors, lastSyncedAt: ts }
  return state.lastResult
- } catch (e) {
+} catch (e) {
  state.lastError = e.message || String(e)
  state.lastResult = { pushed: 0, pulled: 0, merged: 0, error: state.lastError }
  throw e
- } finally {
+} finally {
  state.isSyncing = false
  notify()
- }
+}
 }
 
 // 双向：先 pull 再 push
 export async function sync() {
  const p = await pull()
  const u = await push()
+ const errors = [...(p.errors || []), ...(u.errors || [])]
  return {
- pushed: u.pushed,
- pulled: p.pulled,
- lastSyncedAt: state.lastSyncedAt
+   pushed: u.pushed,
+   pulled: p.pulled,
+   errors,
+   lastSyncedAt: state.lastSyncedAt
  }
 }
 

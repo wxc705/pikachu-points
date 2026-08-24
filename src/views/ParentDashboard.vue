@@ -139,9 +139,11 @@ async function onPush() {
   syncMsg.value = ''
   try {
     const r = await store.syncPushToCloud()
-    syncMsg.value = `✅ 推送 ${r.pushed} 条`
-    setTimeout(() => (syncMsg.value = ''), 3000)
-  } catch (e) { syncMsg.value = '❌ 推送失败' }
+    syncMsg.value = r.errors?.length
+      ? `⚠️ 部分推送：${r.pushed} 条成功，失败：${r.errors.map((x) => x.table).join('、')}`
+      : `✅ 推送 ${r.pushed} 条`
+    setTimeout(() => (syncMsg.value = ''), 6000)
+  } catch (e) { syncMsg.value = `❌ 推送失败：${e.message}` }
 }
 async function onPull() {
   syncMsg.value = ''
@@ -149,15 +151,17 @@ async function onPull() {
     const r = await store.syncPullFromCloud()
     syncMsg.value = r.pulled > 0 ? `✅ 拉取 ${r.pulled} 条` : '云端无新数据'
     setTimeout(() => (syncMsg.value = ''), 3000)
-  } catch (e) { syncMsg.value = '❌ 拉取失败' }
+  } catch (e) { syncMsg.value = `❌ 拉取失败：${e.message}` }
 }
 async function onSync() {
   syncMsg.value = ''
   try {
     const r = await store.syncBothWays()
-    syncMsg.value = `✅ 推 ${r.pushed} / 拉 ${r.pulled}`
-    setTimeout(() => (syncMsg.value = ''), 3000)
-  } catch (e) { syncMsg.value = '❌ 同步失败' }
+    syncMsg.value = r.errors?.length
+      ? `⚠️ 同步：推 ${r.pushed} / 拉 ${r.pulled}，失败：${r.errors.map((x) => x.table).join('、')}`
+      : `✅ 推 ${r.pushed} / 拉 ${r.pulled}`
+    setTimeout(() => (syncMsg.value = ''), 6000)
+  } catch (e) { syncMsg.value = `❌ 同步失败：${e.message}` }
 }
 
 function grantDelta(delta) { grantAmount.value = (grantAmount.value || 0) + delta }
