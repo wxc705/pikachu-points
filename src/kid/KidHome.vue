@@ -1,20 +1,52 @@
 <template>
   <div class="kid-page">
-    <!-- 顶部：连续打卡 -->
+    <!-- 顶部：奥特曼等级 + 连续打卡 -->
     <div class="kid-streak">
-      <span class="kid-streak-flame">🔥</span>
-      <span class="kid-streak-text">连续打卡 <strong>{{ streak }}</strong> 天</span>
+      <img
+        v-if="ultramanLevel"
+        :src="`/ultraman/level${ultramanLevel}.png`"
+        class="kid-ultraman"
+        alt="奥特曼"
+      />
+      <span v-else class="kid-ultraman" style="display:flex;align-items:center;justify-content:center;font-size:44px;">⚡</span>
+      <div style="display:flex;flex-direction:column;align-items:center;gap:2px;">
+        <div class="kid-streak-text">
+          <span class="kid-streak-flame">🔥</span>
+          连续打卡 <strong>{{ streak }}</strong> 天
+        </div>
+        <span v-if="ultramanLevel" class="kid-level-tag">{{ levelLabel }}</span>
+      </div>
     </div>
 
-    <h2 class="kid-title">今天要做的事：</h2>
+    <h2 class="kid-title">✨ 今天要做的事：</h2>
+
+    <!-- 今日进度条：完成任务数 / 总数，给孩子即时成就感 -->
+    <div v-if="!loading && goals.length" class="kid-progress">
+      <div class="kid-progress-bar">
+        <div class="kid-progress-fill" :style="{ width: progressPct + '%' }"></div>
+      </div>
+      <span class="kid-progress-text">{{ doneCount }} / {{ goals.length }} 完成</span>
+    </div>
 
     <!-- 任务列表 -->
     <div v-if="loading" class="kid-loading" aria-label="加载中">⏳</div>
     <div v-else class="kid-goals">
-      <p v-if="usingFallback" class="kid-empty-note">📭 今天没有任务</p>
-      <div v-for="goal in goals" :key="goal.key" class="kid-goal-card">
-        <div class="kid-goal-info">
+      <!-- 空态：引导卡片填充空白，给小朋友明确下一步 -->
+      <div v-if="usingFallback" class="kid-empty-card">
+        <div class="kid-empty-emoji">🦸</div>
+        <div class="kid-empty-title">今天没有任务哦</div>
+        <div class="kid-empty-hint">去找爸爸妈妈领取新任务吧！</div>
+      </div>
+      <div
+        v-for="(goal, i) in goals"
+        :key="goal.key"
+        class="kid-goal-card"
+        :style="{ animation: `card-in 420ms ${i * 90}ms cubic-bezier(0.34,1.56,0.64,1) both` }"
+      >
+        <div class="kid-goal-emoji-wrap">
           <span class="kid-goal-emoji">{{ goal.emoji }}</span>
+        </div>
+        <div class="kid-goal-info">
           <span class="kid-goal-name">{{ goal.name }}</span>
           <span class="kid-goal-points">+{{ goal.points }} 分</span>
         </div>
@@ -204,6 +236,29 @@ async function onConfirm() {
 
 const streak = computed(() => store.currentStreak)
 const scoreText = computed(() => store.totalPoints.toLocaleString('en-US'))
+
+// 今日进度：已完成任务数 / 百分比
+const doneCount = computed(() => goals.value.filter((g) => isDone(g)).length)
+const progressPct = computed(() => {
+  if (!goals.value.length) return 0
+  return Math.round((doneCount.value / goals.value.length) * 100)
+})
+
+// 奥特曼等级：连续打卡天数 → Lv.1~5（对应 public/ultraman/level1-5.png）
+// streak=0 也显示 Lv.1 初始形态，给小朋友"准备变身"的期待感
+const ultramanLevel = computed(() => {
+  const s = streak.value
+  if (s >= 30) return 5
+  if (s >= 14) return 4
+  if (s >= 7) return 3
+  if (s >= 3) return 2
+  return 1
+})
+const levelLabel = computed(() => {
+  const s = streak.value
+  if (s === 0) return '准备变身'
+  return `奥特曼 Lv.${ultramanLevel.value}`
+})
 
 onMounted(async () => {
   // 进入儿童端：隐藏家长端顶部导航（样式在 kid-style.css 里，通过 body class 作用域）
