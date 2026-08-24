@@ -60,9 +60,8 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { usePointsStore } from '../stores/points.js'
-import { supabase, isSupabaseConfigured } from '../services/supabase.js'
+import { isSupabaseConfigured } from '../services/supabase.js'
 import { playCoin, unlockAudio } from '../services/sound.js'
-import { dateToWeekday } from '../utils/weekday.js'
 import CoinBurst from '../components/CoinBurst.vue'
 import './kid-style.css'
 
@@ -76,17 +75,6 @@ const submitting = ref(false)
 const busy = ref(new Set()) // 打卡后禁用 3 秒的 key 集合（防 6 岁孩子狂点）
 const coinBurst = ref(null)
 const pendingRect = ref(null)
-
-const weekday = dateToWeekday() // 1=周一 ... 7=周日（与 weekly_plan 约定一致）
-
-// ---- 内置占位任务（daily_goals 表未建/为空时兜底）----
-const FALLBACK_GOALS = [
-  { key: 'kid:default:lianzi', name: '练字 20分钟', points: 10, emoji: '📝' },
-  { key: 'kid:default:yuedu', name: '阅读 15分钟', points: 10, emoji: '📖' },
-  { key: 'kid:default:suanshu', name: '数学口算 10题', points: 10, emoji: '🔢' }
-]
-
-const CACHE_KEY = 'pikachu-points:kid-goals'
 
 // ---- 根据任务名猜一个 emoji（daily_goals 没配图标时用）----
 function emojiForName(name) {
@@ -103,75 +91,55 @@ function emojiForName(name) {
   return '⭐'
 }
 
-// ---- 把 daily_goals 行归一化成 { key, name, points, emoji, pid, category } ----
-// 兼容 snake_case（Supabase）与 camelCase（本地缓存/其他来源）
-function normalizeGoal(g) {
-  const name = (g.name || g.task_name || g.title || '').toString().trim()
-  const points = Number(g.points ?? g.points_earned ?? 10) || 10
-  const emoji = g.emoji || g.icon || emojiForName(name)
-  const rawId = g.id ?? null
-  const key = String(rawId ?? name ?? 'goal')
-  // 优先关联真实项目（daily_goals 可能带 project_id），否则用 kid: 前缀合成稳定 id
-  let pid = g.project_id ?? g.projectId ?? null
-  let category = '学习'
-  if (pid != null) {
-    const proj = store.projects.find((p) => String(p.id) === String(pid))
-    if (proj) category = proj.category || '学习'
-  } else {
-    pid = 'kid:' + key
+// ---- 把 project 归一化成 { key, name, points, emoji, pid, category } ----
+// 来源：store.todayRecommended（周计划）或 store.projects（兜底），都是真实项目对象
+function normalizeGoal(p) {
+  const name = (p.name || '').toString().trim()
+  // 固定分值优先；pointRange 项目（如 10-20 分）默认按最低分计
+  let points = Number(p.points) || 0
+  if (!points && Array.isArray(p.pointRange) && p.pointRange[1] > p.pointRange[0]) {
+    points = Number(p.pointRange[0]) || 10
   }
-  return { key, name, points, emoji, pid, category }
-}
-
-// ---- daily_goals 的 localStorage 缓存（离线也能读到上次拉取的任务）----
-function readCache() {
-  try {
-    const raw = localStorage.getItem(CACHE_KEY)
-    if (!raw) return null
-    const obj = JSON.parse(raw)
-    if (!obj || obj.weekday !== weekday || !Array.isArray(obj.goals)) return null
-    return obj.goals
-  } catch (e) {
-    return null
-  }
-}
-
-function writeCache(rows) {
-  try {
-    localStorage.setItem(CACHE_KEY, JSON.stringify({ weekday, goals: rows }))
-  } catch (e) {
-    // 静默：localStorage 不可用（隐私模式）
-  }
+  if (!points) points = 10
+  const emoji = p.emoji || p.icon || emojiForName(name)
+  const key = 'kid:proj:' + p.id
+  // pid 用真实项目 id：isDone / addCheckin 才能和 Checkin 页共用一套打卡记录
+  return { key, name, points, emoji, pid: p.id, category: p.category || '学习' }
 }
 
 async function loadGoals() {
   loading.value = true
   try {
-    let rows = null
-    // 从云读当天任务；Supabase 未配置 / 表未建 / 连不上（HTTP 000）都走兜底
+    // 跨设备：先尝试从云端拉一次（家长在另一台设备配的周计划）
+    // 带 6s 超时，断网/未配置也立即走本地，不让孩子干等
     if (isSupabaseConfigured()) {
-      const { data, error } = await supabase.from('daily_goals').select('*').eq('day_of_week', weekday)
-      if (!error && Array.isArray(data) && data.length) rows = data
+      try {
+        await Promise.race([
+          store.syncPullFromCloud(),
+          new Promise((_, rej) => setTimeout(() => rej(new Error('pull timeout')), 6000))
+        ])
+      } catch (e) {
+        // 静默：云不可达用本地数据
+      }
     }
-    if (!rows) rows = readCache()
-    if (rows && rows.length) {
-      goals.value = rows.map(normalizeGoal)
+    // 数据源：Pinia store（weeklyPlans ∩ projects 已算好"今日推荐"）
+    // 兜底1：家长没配周计划 → 展示系统里全部启用的真实项目（不再硬编码占位任务）
+    // 兜底2：系统没有项目 → 空列表，模板显示"今天没有任务"
+    let recs = [...store.todayRecommended]
+    if (!recs.length) {
+      recs = store.projects.filter((p) => p.isActive !== false)
+    }
+    if (recs.length) {
+      goals.value = recs.map(normalizeGoal)
       usingFallback.value = false
-      writeCache(rows)
     } else {
-      goals.value = FALLBACK_GOALS.map((g) => ({ ...g, pid: g.key, category: '学习' }))
+      goals.value = []
       usingFallback.value = true
     }
   } catch (e) {
-    // 静默：云同步失败不打扰孩子，用缓存/占位任务
-    const cached = readCache()
-    if (cached && cached.length) {
-      goals.value = cached.map(normalizeGoal)
-      usingFallback.value = false
-    } else {
-      goals.value = FALLBACK_GOALS.map((g) => ({ ...g, pid: g.key, category: '学习' }))
-      usingFallback.value = true
-    }
+    // 极端异常也不打扰孩子：空列表
+    goals.value = []
+    usingFallback.value = true
   } finally {
     loading.value = false
   }

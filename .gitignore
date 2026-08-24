@@ -40,3 +40,4 @@ dev-dist/
 
 # 测试文件（开发临时）
 public/test-*.html
+TASK-SYNC-FIX.md
