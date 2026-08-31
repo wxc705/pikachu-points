@@ -1,7 +1,7 @@
 import { openDB as idbOpen } from 'idb'
 
 export const DB_NAME = 'pikachu-points'
-export const DB_VERSION =2
+export const DB_VERSION = 3
 
 let _dbPromise = null
 
@@ -37,6 +37,23 @@ export async function openDB() {
  keyPath: 'weekday'
  })
  store.createIndex('by_weekday', 'weekday', { unique: true })
+ }
+ // v3: 每周任务（QC 课表）
+ if (!db.objectStoreNames.contains('weekly_tasks')) {
+ const store = db.createObjectStore('weekly_tasks', {
+ keyPath: 'id',
+ autoIncrement: true
+ })
+ store.createIndex('by_weekday', 'weekday', { unique: false })
+ }
+ // v3: 任务打卡记录（date+taskId 去重用于防重复打卡）
+ if (!db.objectStoreNames.contains('daily_checkins')) {
+ const store = db.createObjectStore('daily_checkins', {
+ keyPath: 'id',
+ autoIncrement: true
+ })
+ store.createIndex('by_date', 'date', { unique: false })
+ store.createIndex('by_task', 'taskId', { unique: false })
  }
  }
  })
@@ -194,4 +211,62 @@ export async function setWeeklyPlan(weekday, projectIds) {
 export async function clearWeeklyPlan(weekday) {
  const db = await openDB()
  return db.delete('weekly_plan', weekday)
+}
+
+// ----- weekly_tasks (v3): 每周任务（QC 课表） -----
+// task: { weekday, timeSlot, name, points, category, sortOrder, isActive }
+export async function getAllWeeklyTasks() {
+ const db = await openDB()
+ return db.getAll('weekly_tasks')
+}
+
+export async function getWeeklyTasksByWeekday(weekday) {
+ const db = await openDB()
+ return db.getAllFromIndex('weekly_tasks', 'by_weekday', weekday)
+}
+
+export async function addWeeklyTask(task) {
+ const db = await openDB()
+ return db.add('weekly_tasks', { ...task, isActive: task.isActive !== false })
+}
+
+export async function putWeeklyTask(task) {
+ const db = await openDB()
+ return db.put('weekly_tasks', task)
+}
+
+export async function updateWeeklyTask(id, patch) {
+ const db = await openDB()
+ const tx = db.transaction('weekly_tasks', 'readwrite')
+ const store = tx.objectStore('weekly_tasks')
+ const existing = await store.get(id)
+ if (!existing) {
+ await tx.done
+ return null
+ }
+ const next = { ...existing, ...patch, id }
+ await store.put(next)
+ await tx.done
+ return next
+}
+
+export async function deleteWeeklyTask(id) {
+ const db = await openDB()
+ await db.delete('weekly_tasks', id)
+}
+
+// ----- daily_checkins (v3): 任务打卡记录（date+taskId 去重防重复打卡） -----
+export async function addDailyCheckin(entry) {
+ const db = await openDB()
+ return db.add('daily_checkins', entry)
+}
+
+export async function getDailyCheckinsByDate(date) {
+ const db = await openDB()
+ return db.getAllFromIndex('daily_checkins', 'by_date', date)
+}
+
+export async function getAllDailyCheckins() {
+ const db = await openDB()
+ return db.getAll('daily_checkins')
 }
