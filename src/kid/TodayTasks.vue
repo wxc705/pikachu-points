@@ -112,11 +112,9 @@
         </div>
       </section>
 
-      <!-- 申请（Phase 2 占位） -->
-      <section v-else-if="activeTab === 'apply'" class="tt-placeholder">
-        <div class="tt-ph-emoji">📝</div>
-        <div class="tt-ph-title">申请功能开发中</div>
-        <div class="tt-ph-hint">敬请期待</div>
+      <!-- 申请（iPad 版） -->
+      <section v-else-if="activeTab === 'apply'" class="tt-tab-section">
+        <Requests />
       </section>
 
       <!-- 设置（占位 + 返回家长端） -->
@@ -157,6 +155,7 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { usePointsStore } from '../stores/points.js'
 import { dateToWeekday, WEEKDAYS } from '../utils/weekday.js'
 import { playCoin, unlockAudio } from '../services/sound.js'
+import Requests from './Requests.vue'
 import './kid-style.css'
 
 const store = usePointsStore()
@@ -795,6 +794,13 @@ onBeforeUnmount(() => {
 }
 .tt-record-points.is-neg {
   color: #ef4444;
+}
+
+/* ---- Tab 内容区（申请等子页面） ---- */
+.tt-tab-section {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
 }
 
 /* ---- 申请 / 设置 占位 ---- */
