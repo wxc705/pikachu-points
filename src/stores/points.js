@@ -15,7 +15,14 @@ import {
   setWeeklyPlan as dbSetWeeklyPlan,
   clearWeeklyPlan as dbClearWeeklyPlan
 } from '../services/db.js'
+import {
+  getAllWeeklyTasks as dbGetAllWeeklyTasks,
+  addWeeklyTask as dbAddWeeklyTask,
+  getAllDailyCheckins as dbGetAllDailyCheckins,
+  addDailyCheckin as dbAddDailyCheckin
+} from '../services/db.js'
 import { DEFAULT_THEME_ID, getTheme } from '../themes/index.js'
+import { WEEKLY_TASKS_SEED } from '../services/weeklyTasksSeed.js'
 import { push as syncPush, pull as syncPull, sync as syncBoth, onSyncChange, getSyncState, clearCloud as syncClearCloud } from '../services/sync.js'
 import { dateToWeekday } from '../utils/weekday.js'
 
@@ -74,6 +81,8 @@ export const usePointsStore = defineStore('points', () => {
  const requests = ref([])
  const projects = ref([])
  const weeklyPlans = ref([]) // { weekday, projectIds }[]
+ const weeklyTasks = ref([]) // 每周任务配置（QC 课表）
+ const dailyCheckins = ref([]) // 任务打卡记录
  const loaded = ref(false)
 
  const approvedRequests = computed(() =>
@@ -147,17 +156,23 @@ export const usePointsStore = defineStore('points', () => {
 
  async function load(force = false) {
  if (loaded.value && !force) return
- const [c, r, p, w] = await Promise.all([
+ const [c, r, p, w, wt, dc] = await Promise.all([
  getAllCheckins(),
  getAllRequests(),
  dbGetProjects(),
- dbGetAllWeeklyPlans()
+ dbGetAllWeeklyPlans(),
+ dbGetAllWeeklyTasks(),
+ dbGetAllDailyCheckins()
  ])
  checkins.value = c
  requests.value = r
  projects.value = p
  weeklyPlans.value = w
+ weeklyTasks.value = wt
+ dailyCheckins.value = dc
  loaded.value = true
+ // 首次进入即导入课表种子，保证今天就有任务可点
+ await seedWeeklyTasksIfEmpty()
  }
 
  async function refresh() {
@@ -308,6 +323,76 @@ export const usePointsStore = defineStore('points', () => {
   weeklyPlans.value = weeklyPlans.value.filter((w) => w.weekday !== weekday)
  }
 
+ // ----- 每周任务（QC 课表）+ 任务打卡 -----
+
+ // 种子导入：weekly_tasks 空时从课表种子导入（幂等）
+ async function seedWeeklyTasksIfEmpty() {
+  if (weeklyTasks.value.length > 0) return false
+  const existing = await dbGetAllWeeklyTasks()
+  if (existing.length > 0) { weeklyTasks.value = existing; return false }
+  for (const t of WEEKLY_TASKS_SEED) {
+   await dbAddWeeklyTask({ ...t, isActive: true })
+  }
+  weeklyTasks.value = await dbGetAllWeeklyTasks()
+  return true
+ }
+
+ // 今日任务：按当天 weekday 匹配，isActive 过滤，sortOrder 排序
+ const todayTasks = computed(() => {
+  const wd = dateToWeekday()
+  return weeklyTasks.value
+   .filter((t) => t.weekday === wd && t.isActive !== false)
+   .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0) || (a.id || 0) - (b.id || 0))
+ })
+
+ // 今日已完成任务 id 集合（防重复打卡）
+ const todayTaskDoneIds = computed(() => {
+  const s = new Set()
+  for (const c of dailyCheckins.value) {
+   if (c.date === today.value) s.add(c.taskId)
+  }
+  return s
+ })
+
+ // 今日任务所得积分
+ const todayTaskEarned = computed(() =>
+  dailyCheckins.value
+   .filter((c) => c.date === today.value)
+   .reduce((s, c) => s + (c.points || 0), 0)
+ )
+
+ // 打卡一个任务：写 daily_checkins（状态）+ checkins（积分记账）
+ // 同一天同一任务重复点击 → 返回 null（幂等）
+ async function addTaskCheckin(task) {
+  if (todayTaskDoneIds.value.has(task.id)) return null
+  const now = Date.now()
+  const dailyEntry = {
+   date: today.value,
+   taskId: task.id,
+   taskName: task.name,
+   category: task.category,
+   points: task.points,
+   completedAt: now,
+   checkedBy: 'kid'
+  }
+  await dbAddDailyCheckin(dailyEntry)
+  // 积分记账复用现有 checkins 表（totalPoints 自动累计）
+  const checkinEntry = {
+   projectId: null,
+   projectName: task.name,
+   category: task.category,
+   pointsEarned: task.points,
+   taskId: task.id,
+   checkedBy: 'kid',
+   date: today.value,
+   createdAt: now
+  }
+  await dbAddCheckin(checkinEntry)
+  dailyCheckins.value = [...dailyCheckins.value, dailyEntry]
+  checkins.value = [...checkins.value, checkinEntry]
+  return { dailyEntry, checkinEntry }
+ }
+
  // 里程碑状态
  const reachedMilestones = ref(loadReached())
  const pendingMilestone = ref(null)
@@ -421,6 +506,13 @@ export const usePointsStore = defineStore('points', () => {
  todayRecommended,
  setWeeklyPlanItem,
  clearWeeklyPlanItem,
+ weeklyTasks,
+ dailyCheckins,
+ todayTasks,
+ todayTaskDoneIds,
+ todayTaskEarned,
+ seedWeeklyTasksIfEmpty,
+ addTaskCheckin,
  approvedRequests,
  totalEarned,
  totalSpent,
