@@ -69,6 +69,7 @@ export async function push() {
      date: c.date,
      created_at: c.createdAt,
      id: c.id,
+     task_id: c.taskId || null,
      updated_at: nowIso()
    }))
    try {
@@ -193,6 +194,7 @@ export async function pull() {
    note: c.note,
    checkedBy: c.checked_by,
    date: c.date,
+   taskId: c.task_id || null,
    createdAt: c.created_at
  }
  const existing = localCheckinMap.get(c.id)
