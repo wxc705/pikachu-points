@@ -572,3 +572,227 @@ body.kid-mode main {
   border: 2px solid #2a8a9a;
   image-rendering: pixelated;
 }
+/* ===== Minecraft 完整主题 ===== */
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+
+/* === MC主题全局 === */
+[data-theme="minecraft"] {
+  --mc-green: #5d8c2e;
+  --mc-brown: #8b5a2b;
+  --mc-dark: #3d2b1f;
+  --mc-dirt: #6b5344;
+  --mc-grass: #7eb238;
+  --mc-stone: #7f7f7f;
+  --mc-gold: #fcdb05;
+  --mc-diamond: #5decf5;
+}
+[data-theme="minecraft"] .tt-page {
+  font-family: 'Press Start 2P', monospace;
+  background: 
+    repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 15px,
+      rgba(107,83,68,0.06) 15px,
+      rgba(107,83,68,0.06) 16px
+    ),
+    repeating-linear-gradient(
+      90deg,
+      transparent,
+      transparent 15px,
+      rgba(107,83,68,0.06) 15px,
+      rgba(107,83,68,0.06) 16px
+    ),
+    linear-gradient(180deg, #c6b88a 0%, #b8a878 100%) !important;
+}
+
+/* === 顶部栏：草方块风格 === */
+[data-theme="minecraft"] .tt-header {
+  background: linear-gradient(180deg, #7eb238 0%, #5d8c2e 60%, #8b5a2b 100%) !important;
+  border-bottom: 4px solid #3d2b1f !important;
+  position: relative;
+}
+[data-theme="minecraft"] .tt-header::after {
+  content: '';
+  position: absolute;
+  bottom: -8px;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: repeating-linear-gradient(90deg, #8b5a2b 0px, #8b5a2b 8px, #6b5344 8px, #6b5344 16px);
+}
+
+/* === 任务卡片：像素方块 === */
+[data-theme="minecraft"] .tt-card {
+  border: 3px solid #5d3a1a !important;
+  border-radius: 2px !important;
+  box-shadow: 
+    inset 2px 2px 0 rgba(255,255,255,0.25),
+    inset -2px -2px 0 rgba(0,0,0,0.15),
+    4px 4px 0 #3d2b1f !important;
+  background: #f4f1de !important;
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.1s;
+}
+[data-theme="minecraft"] .tt-card:active {
+  transform: translate(2px, 2px);
+  box-shadow: 
+    inset 2px 2px 0 rgba(255,255,255,0.25),
+    2px 2px 0 #3d2b1f !important;
+}
+/* 卡片左侧像素条 */
+[data-theme="minecraft"] .tt-card::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 5px;
+  background: repeating-linear-gradient(180deg, #5d8c2e 0px, #5d8c2e 5px, #7eb238 5px, #7eb238 10px);
+}
+
+/* === 分类图标：MC物品贴图 === */
+[data-theme="minecraft"] .tt-slot-icon {
+  font-size: 0 !important;
+  width: 24px;
+  height: 24px;
+  display: inline-block;
+  image-rendering: pixelated;
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  flex-shrink: 0;
+}
+/* 用MC贴图替换emoji */
+[data-theme="minecraft"] .mc-icon-英语 { background-image: url('/mc/icon-english.png'); }
+[data-theme="minecraft"] .mc-icon-思维 { background-image: url('/mc/icon-thinking.png'); }
+[data-theme="minecraft"] .mc-icon-语文 { background-image: url('/mc/icon-chinese.png'); }
+[data-theme="minecraft"] .mc-icon-编程 { background-image: url('/mc/icon-programming.png'); }
+[data-theme="minecraft"] .mc-icon-国象 { background-image: url('/mc/icon-chess.png'); }
+[data-theme="minecraft"] .mc-icon-阅读 { background-image: url('/mc/icon-english.png'); }
+[data-theme="minecraft"] .mc-icon-体能 { background-image: url('/mc/icon-sport.png'); }
+[data-theme="minecraft"] .mc-icon-写字 { background-image: url('/mc/icon-writing.png'); }
+[data-theme="minecraft"] .mc-icon-游戏 { background-image: url('/mc/diamond.png'); }
+[data-theme="minecraft"] .mc-icon-实验 { background-image: url('/mc/icon-experiment.png'); }
+[data-theme="minecraft"] .mc-icon-乐高 { background-image: url('/mc/icon-lego.png'); }
+
+/* === 打卡按钮：像素风格 === */
+[data-theme="minecraft"] .tt-card-btn {
+  border-radius: 2px !important;
+  border: 2px solid #5d3a1a !important;
+  font-family: 'Press Start 2P', monospace !important;
+  font-size: 9px !important;
+  box-shadow: 2px 2px 0 #3d2b1f;
+  background: linear-gradient(180deg, #7eb238, #5d8c2e) !important;
+  color: #f4f1de !important;
+}
+[data-theme="minecraft"] .tt-card-btn:active {
+  transform: translate(1px, 1px);
+  box-shadow: 1px 1px 0 #3d2b1f;
+}
+[data-theme="minecraft"] .tt-card-btn.is-done {
+  background: linear-gradient(180deg, #5decf5, #2a8a9a) !important;
+  border-color: #1a5a6a !important;
+}
+
+/* === 底部导航：石头材质 === */
+[data-theme="minecraft"] .tt-tabs {
+  background: linear-gradient(180deg, #7f7f7f, #5a5a5a) !important;
+  border-top: 4px solid #3d2b1f !important;
+  position: relative;
+}
+[data-theme="minecraft"] .tt-tabs::before {
+  content: '';
+  position: absolute;
+  top: -8px;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: repeating-linear-gradient(90deg, #7f7f7f 0px, #7f7f7f 8px, #6a6a6a 8px, #6a6a6a 16px);
+}
+[data-theme="minecraft"] .tt-tab {
+  border-radius: 2px !important;
+  border: 2px solid transparent !important;
+  font-family: 'Press Start 2P', monospace !important;
+  font-size: 10px !important;
+  text-shadow: 1px 1px 0 #1a1a1a;
+}
+[data-theme="minecraft"] .tt-tab.is-active {
+  background: #5d8c2e !important;
+  color: #f4f1de !important;
+  border-color: #3d5a1a !important;
+  box-shadow: inset 2px 2px 0 rgba(255,255,255,0.2);
+}
+
+/* === 积分数字：像素风 === */
+[data-theme="minecraft"] .tt-hd-num,
+[data-theme="minecraft"] .tt-score-num {
+  font-family: 'Press Start 2P', monospace !important;
+  text-shadow: 2px 2px 0 #3d2b1a, -1px -1px 0 rgba(255,255,255,0.3) !important;
+  color: #fcdb05 !important;
+}
+
+/* === 积分页装饰 === */
+[data-theme="minecraft"] .tt-score-card {
+  background: linear-gradient(135deg, #5d8c2e, #3d5a1a) !important;
+  border: 3px solid #3d2b1f !important;
+  border-radius: 2px !important;
+  position: relative;
+  overflow: hidden;
+}
+[data-theme="minecraft"] .tt-score-card::after {
+  content: '⛏';
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 40px;
+  opacity: 0.2;
+}
+
+/* === 空白区域：像素网格装饰 === */
+[data-theme="minecraft"] .tt-today {
+  position: relative;
+}
+[data-theme="minecraft"] .tt-today::before {
+  content: '';
+  position: fixed;
+  bottom: 80px;
+  right: 12px;
+  width: 64px;
+  height: 64px;
+  background: url('/mc/creeper.png') no-repeat center;
+  background-size: contain;
+  image-rendering: pixelated;
+  opacity: 0.12;
+  pointer-events: none;
+}
+
+/* === 连续打卡：火焰像素 === */
+[data-theme="minecraft"] .tt-hd-streak {
+  position: relative;
+}
+[data-theme="minecraft"] .tt-hd-streak::after {
+  content: '🔥';
+  font-size: 10px;
+  position: absolute;
+  top: -2px;
+  right: -2px;
+}
+
+/* === 分数标签 === */
+[data-theme="minecraft"] .tt-card-points {
+  font-family: 'Press Start 2P', monospace !important;
+  font-size: 11px !important;
+  color: #fcdb05 !important;
+  text-shadow: 1px 1px 0 #3d2b1f;
+}
+
+/* === 弹窗确认 === */
+[data-theme="minecraft"] .tt-confirm-box {
+  border: 4px solid #5d3a1a !important;
+  border-radius: 2px !important;
+  box-shadow: 6px 6px 0 #3d2b1f !important;
+  background: #f4f1de !important;
+}

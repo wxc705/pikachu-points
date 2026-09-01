@@ -49,7 +49,7 @@
           >
             <div class="tt-card" :class="cardClass(task)" @click="tapTask(task)">
               <div class="tt-card-slot">
-                <span class="tt-slot-icon">{{ emojiForTask(task) }}</span>
+                <span class="tt-slot-icon mc-icon" :class="'mc-icon-' + (task.category || '')">{{ emojiForTask(task) }}</span>
                 <span class="tt-slot-text">{{ task.category || '' }}</span>
               </div>
               <div class="tt-card-mid">
