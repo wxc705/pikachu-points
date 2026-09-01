@@ -855,122 +855,36 @@ body.kid-mode main {
   height: 28px !important;
 }
 
-/* ===== MC 空白区域装饰贴图 ===== */
-[data-theme="minecraft"] .tt-today::before {
-  content: '';
+/* ===== MC 空白区域装饰（真实DOM元素） ===== */
+.mc-deco {
   position: fixed;
-  bottom: 100px;
-  right: 16px;
-  width: 48px;
-  height: 48px;
-  background: url('/mc/deco-steve.png') no-repeat center;
-  background-size: contain;
-  image-rendering: pixelated;
-  opacity: 0.25;
   pointer-events: none;
+  z-index: 1;
+  display: none;
+  opacity: 0.35;
+  font-size: 32px;
+  filter: grayscale(30%);
   animation: mc-float 4s ease-in-out infinite;
 }
-[data-theme="minecraft"] .tt-today::after {
-  content: '';
-  position: fixed;
-  top: 120px;
-  right: 20px;
-  width: 40px;
-  height: 40px;
-  background: url('/mc/deco-creeper.png') no-repeat center;
-  background-size: contain;
-  image-rendering: pixelated;
-  opacity: 0.18;
-  pointer-events: none;
-  animation: mc-float 5s ease-in-out infinite 1s;
-}
+.mc-deco-steve { bottom: 100px; right: 20px; animation-delay: 0s; }
+.mc-deco-creeper { top: 110px; right: 16px; animation-delay: 0.5s; font-size: 28px; }
+.mc-deco-pig { bottom: 130px; left: 16px; animation-delay: 1s; }
+.mc-deco-zombie { top: 130px; left: 20px; animation-delay: 1.5s; font-size: 28px; }
+.mc-deco-sheep { bottom: 160px; right: 40px; animation-delay: 2s; font-size: 26px; }
+.mc-deco-sword { top: 160px; left: 40px; animation-delay: 0.8s; font-size: 24px; }
+.mc-deco-star { top: 90px; right: 60px; animation-delay: 1.2s; font-size: 20px; opacity: 0.25; }
+.mc-deco-moon { bottom: 180px; left: 50px; animation-delay: 2.5s; font-size: 22px; opacity: 0.25; }
 
-/* 积分页装饰 */
-[data-theme="minecraft"] .tt-points::before {
-  content: '';
-  position: fixed;
-  bottom: 120px;
-  left: 16px;
-  width: 44px;
-  height: 44px;
-  background: url('/mc/deco-pig.png') no-repeat center;
-  background-size: contain;
-  image-rendering: pixelated;
-  opacity: 0.22;
-  pointer-events: none;
-}
-[data-theme="minecraft"] .tt-points::after {
-  content: '';
-  position: fixed;
-  top: 140px;
-  left: 20px;
-  width: 36px;
-  height: 36px;
-  background: url('/mc/deco-zombie.png') no-repeat center;
-  background-size: contain;
-  image-rendering: pixelated;
-  opacity: 0.2;
-  pointer-events: none;
-}
-
-/* 课表页装饰 */
-[data-theme="minecraft"] .sch-page::before {
-  content: '';
-  position: fixed;
-  bottom: 110px;
-  right: 24px;
-  width: 32px;
-  height: 32px;
-  background: url('/mc/deco-sheep.png') no-repeat center;
-  background-size: contain;
-  image-rendering: pixelated;
-  opacity: 0.2;
-  pointer-events: none;
-}
-[data-theme="minecraft"] .sch-page::after {
-  content: '';
-  position: fixed;
-  top: 100px;
-  left: 16px;
-  width: 28px;
-  height: 28px;
-  background: url('/mc/deco-skeleton.png') no-repeat center;
-  background-size: contain;
-  image-rendering: pixelated;
-  opacity: 0.18;
-  pointer-events: none;
-}
-
-/* 申请页装饰 */
-[data-theme="minecraft"] .req-page::before {
-  content: '';
-  position: fixed;
-  bottom: 115px;
-  left: 20px;
-  width: 36px;
-  height: 36px;
-  background: url('/mc/deco-totem.png') no-repeat center;
-  background-size: contain;
-  image-rendering: pixelated;
-  opacity: 0.2;
-  pointer-events: none;
-}
-[data-theme="minecraft"] .req-page::after {
-  content: '';
-  position: fixed;
-  top: 110px;
-  right: 16px;
-  width: 30px;
-  height: 30px;
-  background: url('/mc/deco-cat.png') no-repeat center;
-  background-size: contain;
-  image-rendering: pixelated;
-  opacity: 0.18;
-  pointer-events: none;
-}
+/* 只在MC主题下显示 */
+[data-theme="minecraft"] .mc-deco { display: block; }
+[data-theme="ultraman"] .mc-deco,
+[data-theme="pikachu"] .mc-deco,
+[data-theme="dino"] .mc-deco,
+[data-theme="ocean"] .mc-deco,
+[data-theme="space"] .mc-deco { display: none; }
 
 /* 通用浮动动画 */
 @keyframes mc-float {
   0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-6px); }
+  50% { transform: translateY(-8px); }
 }

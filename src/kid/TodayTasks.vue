@@ -158,6 +158,15 @@
       :message="mcEffect.message"
       @done="mcEffect.show = false"
     />
+    <!-- MC 空白区装饰 -->
+    <div class="mc-deco mc-deco-steve">🧑</div>
+    <div class="mc-deco mc-deco-creeper">💀</div>
+    <div class="mc-deco mc-deco-pig">🐷</div>
+    <div class="mc-deco mc-deco-zombie">🧟</div>
+    <div class="mc-deco mc-deco-sheep">🐑</div>
+    <div class="mc-deco mc-deco-sword">⚔️</div>
+    <div class="mc-deco mc-deco-star">⭐</div>
+    <div class="mc-deco mc-deco-moon">🌙</div>
   </div>
 </template>
 
