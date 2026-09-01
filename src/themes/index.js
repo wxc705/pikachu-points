@@ -40,6 +40,51 @@ export const THEMES = [
      bg: '#fef9c3',
      surface: '#ffffff'
    }
+ },
+ {
+   id: 'dino',
+   name: '恐龙乐园',
+   emoji: '🦕',
+   description: '丛林绿+泥土棕，霸王龙来了',
+   colors: {
+     primary: '#4ade80',
+     secondary: '#92400e',
+     accent: '#f97316',
+     bg: '#ecfdf5',
+     surface: '#ffffff',
+     ink: '#1a2e05',
+     'ink-soft': '#4d7c0f'
+   }
+ },
+ {
+   id: 'ocean',
+   name: '海底世界',
+   emoji: '🐙',
+   description: '深海蓝+珊瑚橙，小丑鱼在游泳',
+   colors: {
+     primary: '#38bdf8',
+     secondary: '#0e7490',
+     accent: '#fb923c',
+     bg: '#f0f9ff',
+     surface: '#ffffff',
+     ink: '#0c4a6e',
+     'ink-soft': '#0369a1'
+   }
+ },
+ {
+   id: 'space',
+   name: '太空探险',
+   emoji: '🚀',
+   description: '星空紫+火箭红，飞向月球',
+   colors: {
+     primary: '#a78bfa',
+     secondary: '#dc2626',
+     accent: '#fbbf24',
+     bg: '#1e1b4b',
+     surface: '#312e81',
+     ink: '#f5f3ff',
+     'ink-soft': '#c4b5fd'
+   }
  }
 ]
 

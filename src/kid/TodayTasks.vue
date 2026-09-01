@@ -117,11 +117,9 @@
         <Requests />
       </section>
 
-      <!-- 设置（占位 + 返回家长端） -->
-      <section v-else class="tt-placeholder">
-        <div class="tt-ph-emoji">⚙️</div>
-        <div class="tt-ph-title">设置功能开发中</div>
-        <a class="tt-ph-link" href="#/">👨‍👩‍👧 返回家长端</a>
+      <!-- 设置 -->
+      <section v-else class="tt-tab-section">
+        <Settings />
       </section>
     </main>
 
@@ -156,6 +154,7 @@ import { usePointsStore } from '../stores/points.js'
 import { dateToWeekday, WEEKDAYS } from '../utils/weekday.js'
 import { playCoin, unlockAudio } from '../services/sound.js'
 import Requests from './Requests.vue'
+import Settings from './Settings.vue'
 import './kid-style.css'
 
 const store = usePointsStore()
