@@ -174,6 +174,15 @@ export const usePointsStore = defineStore('points', () => {
  loaded.value = true
  // 首次进入即导入课表种子，保证今天就有任务可点
  await seedWeeklyTasksIfEmpty()
+ // 自动同步：如果本地没有项目或计划，从Supabase拉取
+ if (p.length === 0 || w.length === 0) {
+  try { await syncPull() } catch (e) { console.warn('[sync] auto-pull failed:', e.message) }
+  // 拉取后重新加载本地数据
+  projects.value = await dbGetProjects()
+  weeklyPlans.value = await dbGetAllWeeklyPlans()
+  checkins.value = await getAllCheckins()
+  requests.value = await getAllRequests()
+ }
  }
 
  async function refresh() {
