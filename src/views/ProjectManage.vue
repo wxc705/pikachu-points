@@ -244,10 +244,30 @@ const CAT_META = {
  运动: { emoji: '🏃' },
  学习: { emoji: '📚' },
  生活: { emoji: '🧹' },
- 评价: { emoji: '⭐' }
+ 评价: { emoji: '⭐' },
+ 英语: { emoji: '🔤' },
+ 思维: { emoji: '🧠' },
+ 语文: { emoji: '📖' },
+ 编程: { emoji: '💻' },
+ 国象: { emoji: '♟️' },
+ 阅读: { emoji: '📚' },
+ 体能: { emoji: '💪' },
+ 写字: { emoji: '✏️' },
+ 游戏: { emoji: '🎮' },
+ 实验: { emoji: '🔬' },
+ 乐高: { emoji: '🧱' }
 }
 
-const categories = ['饮食', '运动', '学习', '生活', '评价']
+// 动态分类：从实际项目中提取，保持 CAT_META 里的顺序
+const categories = computed(() => {
+ const cats = new Set(store.projectsByCategory.keys())
+ const ordered = Object.keys(CAT_META).filter((c) => cats.has(c))
+ // 把不在 CAT_META 里的分类追加到末尾
+ for (const c of cats) {
+  if (!CAT_META[c]) { CAT_META[c] = { emoji: '📦' }; ordered.push(c) }
+ }
+ return ordered
+})
 
 function visibleProjects(cat) {
  const all = store.projectsByCategory.get(cat) || []
