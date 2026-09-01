@@ -53,7 +53,7 @@
                 <span class="tt-slot-text">{{ task.category || '' }}</span>
               </div>
               <div class="tt-card-mid">
-                <span class="tt-card-emoji">{{ emojiForTask(task) }}</span>
+                <span class="mc-task-icon" :class="'mc-task-' + (task.name || '')"></span>
                 <span class="tt-card-name">{{ task.name }}</span>
               </div>
               <div class="tt-card-right">
@@ -112,6 +112,11 @@
         </div>
       </section>
 
+      <!-- 课表 -->
+      <section v-else-if="activeTab === 'schedule'" class="tt-tab-section">
+        <Schedule />
+      </section>
+
       <!-- 申请（iPad 版） -->
       <section v-else-if="activeTab === 'apply'" class="tt-tab-section">
         <Requests />
@@ -123,9 +128,10 @@
       </section>
     </main>
 
-    <!-- 底部导航：4 个大 tab，内部 ref 切换，不跳路由 -->
+    <!-- 底部导航：5 个大 tab，内部 ref 切换，不跳路由 -->
     <nav class="tt-tabs">
       <button class="tt-tab" :class="{ 'is-active': activeTab === 'today' }" @click="activeTab = 'today'">📋 今日</button>
+      <button class="tt-tab" :class="{ 'is-active': activeTab === 'schedule' }" @click="activeTab = 'schedule'">📅 课表</button>
       <button class="tt-tab" :class="{ 'is-active': activeTab === 'points' }" @click="activeTab = 'points'">🏆 积分</button>
       <button class="tt-tab" :class="{ 'is-active': activeTab === 'apply' }" @click="activeTab = 'apply'">📝 申请</button>
       <button class="tt-tab" :class="{ 'is-active': activeTab === 'settings' }" @click="activeTab = 'settings'">⚙️ 设置</button>
@@ -163,6 +169,7 @@ import { playCoin, unlockAudio } from '../services/sound.js'
 import Requests from './Requests.vue'
 import Settings from './Settings.vue'
 import McEffect from './McEffect.vue'
+import Schedule from './Schedule.vue'
 import './kid-style.css'
 
 const store = usePointsStore()

@@ -715,8 +715,10 @@ body.kid-mode main {
   border-radius: 2px !important;
   border: 2px solid transparent !important;
   font-family: 'Press Start 2P', monospace !important;
-  font-size: 10px !important;
+  font-size: 14px !important;
+  min-height: 96px !important;
   text-shadow: 1px 1px 0 #1a1a1a;
+  gap: 6px !important;
 }
 [data-theme="minecraft"] .tt-tab.is-active {
   background: #5d8c2e !important;
@@ -795,4 +797,60 @@ body.kid-mode main {
   border-radius: 2px !important;
   box-shadow: 6px 6px 0 #3d2b1f !important;
   background: #f4f1de !important;
+}
+
+/* === 任务名称MC图标（区别于类别图标） === */
+[data-theme="minecraft"] .mc-task-多邻国1-2单元 { background-image: url('/mc/cookie.png'); }
+[data-theme="minecraft"] .mc-task-思维 { background-image: url('/mc/redstone.png'); }
+[data-theme="minecraft"] .mc-task-语文预习 { background-image: url('/mc/nether-star.png'); }
+[data-theme="minecraft"] .mc-task-英语 { background-image: url('/mc/torchflower.png'); }
+[data-theme="minecraft"] .mc-task-编程40min { background-image: url('/mc/icon-programming.png'); }
+[data-theme="minecraft"] .mc-task-国象15min { background-image: url('/mc/emerald.png'); }
+[data-theme="minecraft"] .mc-task-阅读15min { background-image: url('/mc/icon-english.png'); }
+[data-theme="minecraft"] .mc-task-语文阅读 { background-image: url('/mc/cake.png'); }
+[data-theme="minecraft"] .mc-task-乐高40min { background-image: url('/mc/icon-lego.png'); }
+[data-theme="minecraft"] .mc-task-体能课 { background-image: url('/mc/icon-sport.png'); }
+[data-theme="minecraft"] .mc-task-卡丁车 { background-image: url('/mc/firework.png'); }
+[data-theme="minecraft"] .mc-task-游戏 { background-image: url('/mc/slime.png'); }
+[data-theme="minecraft"] .mc-task-国象课 { background-image: url('/mc/icon-chess.png'); }
+[data-theme="minecraft"] .mc-task-诗歌二首 { background-image: url('/mc/cat.png'); }
+[data-theme="minecraft"] .mc-task-写字15min { background-image: url('/mc/icon-writing.png'); }
+[data-theme="minecraft"] .mc-task-实验课 { background-image: url('/mc/icon-experiment.png'); }
+
+/* 任务名称MC图标样式 */
+[data-theme="minecraft"] .mc-task-icon {
+  font-size: 0 !important;
+  width: 28px;
+  height: 28px;
+  display: inline-block;
+  image-rendering: pixelated;
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+  flex-shrink: 0;
+  border: 2px solid #5d3a1a;
+  border-radius: 2px;
+  background-color: #f4f1de;
+}
+
+/* === 卡片字体加大 === */
+[data-theme="minecraft"] .tt-card-name {
+  font-size: 16px !important;
+  font-weight: 800 !important;
+}
+[data-theme="minecraft"] .tt-card-points {
+  font-size: 14px !important;
+}
+[data-theme="minecraft"] .tt-card-btn {
+  font-size: 12px !important;
+  min-width: 60px !important;
+  min-height: 40px !important;
+}
+[data-theme="minecraft"] .tt-slot-text {
+  font-size: 11px !important;
+  font-weight: 700 !important;
+}
+[data-theme="minecraft"] .tt-slot-icon {
+  width: 28px !important;
+  height: 28px !important;
 }
