@@ -21,11 +21,13 @@ export const THEMES = [
    emoji: '🟩',
    description: '草方块绿，钻石蓝，泥土棕',
    colors: {
-     primary: '#7eb238',
+     primary: '#5d8c2e',
      secondary: '#8b5a2b',
      accent: '#5decf5',
-     bg: '#a5d6e7',
-     surface: '#f4f1de'
+     bg: '#c6b88a',
+     surface: '#f4f1de',
+     ink: '#3d2b1f',
+     'ink-soft': '#6b5344'
    }
  },
  {

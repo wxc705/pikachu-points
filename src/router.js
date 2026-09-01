@@ -42,4 +42,13 @@ const router = createRouter({
  routes
 })
 
+// iPad 打开任意路由 → 自动跳转到 kid/today（iPad 是孩子的设备）
+router.beforeEach((to, from, next) => {
+ if (isIPad() && !to.path.startsWith('/kid')) {
+  next('/kid/today')
+ } else {
+  next()
+ }
+})
+
 export default router

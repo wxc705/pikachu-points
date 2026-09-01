@@ -503,3 +503,72 @@ body.kid-mode main {
   .kid-goal-name { font-size: 30px; }
   .kid-score-num { font-size: 88px; }
 }
+
+/* ===== Minecraft 像素风装饰 ===== */
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+
+/* MC主题下启用像素字体 */
+[data-theme="minecraft"] .tt-page,
+[data-theme="minecraft"] .tt-card,
+[data-theme="minecraft"] .tt-tab {
+  font-family: 'Press Start 2P', monospace !important;
+}
+
+/* MC主题卡片：像素边框 */
+[data-theme="minecraft"] .tt-card {
+  border: 3px solid #5d3a1a !important;
+  border-radius: 4px !important;
+  box-shadow: 
+    inset 2px 2px 0 rgba(255,255,255,0.3),
+    4px 4px 0 #3d2b1f !important;
+  image-rendering: pixelated;
+}
+
+/* MC主题打卡按钮：像素风 */
+[data-theme="minecraft"] .tt-card-btn {
+  border-radius: 4px !important;
+  border: 2px solid #5d3a1a !important;
+  font-family: 'Press Start 2P', monospace !important;
+  font-size: 10px !important;
+}
+
+/* MC主题底部导航 */
+[data-theme="minecraft"] .tt-tabs {
+  border-top: 4px solid #5d3a1a !important;
+  background: #c6b88a !important;
+}
+
+/* MC主题tab按钮 */
+[data-theme="minecraft"] .tt-tab {
+  border-radius: 4px !important;
+  border: 2px solid transparent !important;
+}
+[data-theme="minecraft"] .tt-tab.is-active {
+  background: #5d8c2e !important;
+  color: #f4f1de !important;
+  border-color: #3d5a1a !important;
+  box-shadow: inset 2px 2px 0 rgba(255,255,255,0.2);
+}
+
+/* MC主题头部 */
+[data-theme="minecraft"] .tt-header {
+  background: linear-gradient(180deg, #5d8c2e, #4a7024) !important;
+  border-bottom: 4px solid #3d5a1a !important;
+}
+
+/* MC主题积分数字 */
+[data-theme="minecraft"] .tt-hd-num,
+[data-theme="minecraft"] .tt-score-num {
+  font-family: 'Press Start 2P', monospace !important;
+  text-shadow: 2px 2px 0 #3d2b1a !important;
+}
+
+/* XP瓶图标（用CSS模拟） */
+.mc-xp-icon {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  background: #5decf5;
+  border: 2px solid #2a8a9a;
+  image-rendering: pixelated;
+}

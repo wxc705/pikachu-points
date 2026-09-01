@@ -67,8 +67,10 @@ function dateToStr(d) {
 export function applyTheme(theme) {
  if (typeof document === 'undefined' || !theme || !theme.colors) return
  const root = document.documentElement
+ // 设置 data-theme 属性（供 CSS 选择器使用）
+ root.setAttribute('data-theme', theme.id || '')
  for (const [key, value] of Object.entries(theme.colors)) {
- root.style.setProperty(`--color-${key}`, value)
+  root.style.setProperty(`--color-${key}`, value)
  }
  // 文字色（默认 ink/ink-soft 来自 style.css，仅在主题未提供时回退）
  if (!theme.colors.ink) root.style.setProperty('--color-ink', '#1f2937')

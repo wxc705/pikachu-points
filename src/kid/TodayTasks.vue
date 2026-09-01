@@ -145,6 +145,13 @@
         </div>
       </Transition>
     </Teleport>
+    <!-- MC打卡特效 -->
+    <McEffect
+      :show="mcEffect.show"
+      :points="mcEffect.points"
+      :message="mcEffect.message"
+      @done="mcEffect.show = false"
+    />
   </div>
 </template>
 
@@ -155,6 +162,7 @@ import { dateToWeekday, WEEKDAYS } from '../utils/weekday.js'
 import { playCoin, unlockAudio } from '../services/sound.js'
 import Requests from './Requests.vue'
 import Settings from './Settings.vue'
+import McEffect from './McEffect.vue'
 import './kid-style.css'
 
 const store = usePointsStore()
@@ -165,6 +173,7 @@ const confirmTask = ref(null)
 const submitting = ref(false)
 const busy = ref(new Set()) // 打卡后 3 秒防抖，防 6 岁孩子狂点
 const floating = ref(null) // { taskId, points, nonce }
+const mcEffect = ref({ show: false, points: 1, message: '任务完成！' })
 
 // 当前分钟数（自 0:00），每分钟刷新用于时段高亮
 function nowToMinutes() {
@@ -293,6 +302,9 @@ async function onConfirm() {
       playCoin().catch(() => {})
       const nonce = Date.now()
       floating.value = { taskId: task.id, points: task.points, nonce }
+      // MC特效：XP瓶飞出
+      const msgs = ['太棒了！', '经验值+1！', '挖到矿了！', '升级啦！', '获得成就！']
+      mcEffect.value = { show: true, points: task.points, message: msgs[Math.floor(Math.random() * msgs.length)] }
       setTimeout(() => {
         if (floating.value && floating.value.nonce === nonce) floating.value = null
       }, 900)
