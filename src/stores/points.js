@@ -22,7 +22,6 @@ import {
   addDailyCheckin as dbAddDailyCheckin
 } from '../services/db.js'
 import { DEFAULT_THEME_ID, getTheme } from '../themes/index.js'
-import { WEEKLY_TASKS_SEED } from '../services/weeklyTasksSeed.js'
 import { push as syncPush, pull as syncPull, sync as syncBoth, onSyncChange, getSyncState, clearCloud as syncClearCloud } from '../services/sync.js'
 import { dateToWeekday } from '../utils/weekday.js'
 
@@ -325,23 +324,22 @@ export const usePointsStore = defineStore('points', () => {
 
  // ----- 每周任务（QC 课表）+ 任务打卡 -----
 
- // 种子导入：weekly_tasks 空时从课表种子导入（幂等）
+ // 种子导入：不再需要（项目已由家长端管理）
  async function seedWeeklyTasksIfEmpty() {
-  if (weeklyTasks.value.length > 0) return false
-  const existing = await dbGetAllWeeklyTasks()
-  if (existing.length > 0) { weeklyTasks.value = existing; return false }
-  for (const t of WEEKLY_TASKS_SEED) {
-   await dbAddWeeklyTask({ ...t, isActive: true })
-  }
-  weeklyTasks.value = await dbGetAllWeeklyTasks()
-  return true
+  return false
  }
 
- // 今日任务：按当天 weekday 匹配，isActive 过滤，sortOrder 排序
+ // 今日任务：从 projects + weekly_plan 读取（家长端控制）
  const todayTasks = computed(() => {
   const wd = dateToWeekday()
-  return weeklyTasks.value
-   .filter((t) => t.weekday === wd && t.isActive !== false)
+  // 找到今天对应的 weekly_plan
+  const plan = weeklyPlans.value.find((w) => w.weekday === wd)
+  if (!plan || !plan.projectIds || !plan.projectIds.length) return []
+  // 用 projectIds 查找活跃的 projects
+  const projectMap = new Map(projects.value.map((p) => [p.id, p]))
+  return plan.projectIds
+   .map((pid) => projectMap.get(pid))
+   .filter((p) => p && p.isActive !== false)
    .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0) || (a.id || 0) - (b.id || 0))
  })
 
