@@ -888,3 +888,34 @@ body.kid-mode main {
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(-8px); }
 }
+
+/* ===== MC主题：我的世界背景图 ===== */
+[data-theme="minecraft"] .tt-page {
+  background: url('/mc-bg.jpeg') no-repeat center center !important;
+  background-size: cover !important;
+  background-attachment: fixed !important;
+}
+/* 内容区半透明，让背景透出来 */
+[data-theme="minecraft"] .tt-body {
+  background: rgba(198, 184, 138, 0.75) !important;
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+}
+/* 顶栏半透明 */
+[data-theme="minecraft"] .tt-header {
+  background: linear-gradient(180deg, rgba(126,178,56,0.85), rgba(93,140,46,0.85)) !important;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+/* 底部导航半透明 */
+[data-theme="minecraft"] .tt-tabs {
+  background: linear-gradient(180deg, rgba(127,127,127,0.85), rgba(90,90,90,0.85)) !important;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+/* 卡片半透明 */
+[data-theme="minecraft"] .tt-card {
+  background: rgba(244,241,222,0.82) !important;
+  backdrop-filter: blur(1px);
+  -webkit-backdrop-filter: blur(1px);
+}
