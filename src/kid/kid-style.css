@@ -588,22 +588,6 @@ body.kid-mode main {
 }
 [data-theme="minecraft"] .tt-page {
   font-family: 'Press Start 2P', monospace;
-  background: 
-    repeating-linear-gradient(
-      0deg,
-      transparent,
-      transparent 15px,
-      rgba(107,83,68,0.06) 15px,
-      rgba(107,83,68,0.06) 16px
-    ),
-    repeating-linear-gradient(
-      90deg,
-      transparent,
-      transparent 15px,
-      rgba(107,83,68,0.06) 15px,
-      rgba(107,83,68,0.06) 16px
-    ),
-    linear-gradient(180deg, #c6b88a 0%, #b8a878 100%) !important;
 }
 
 /* === 顶部栏：草方块风格 === */
