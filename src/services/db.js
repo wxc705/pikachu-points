@@ -1,7 +1,7 @@
 import { openDB as idbOpen } from 'idb'
 
 export const DB_NAME = 'pikachu-points'
-export const DB_VERSION = 3
+export const DB_VERSION = 4
 
 let _dbPromise = null
 
@@ -48,12 +48,20 @@ export async function openDB() {
  }
  // v3: 任务打卡记录（date+taskId 去重用于防重复打卡）
  if (!db.objectStoreNames.contains('daily_checkins')) {
- const store = db.createObjectStore('daily_checkins', {
- keyPath: 'id',
- autoIncrement: true
- })
- store.createIndex('by_date', 'date', { unique: false })
- store.createIndex('by_task', 'taskId', { unique: false })
+   const store = db.createObjectStore('daily_checkins', {
+     keyPath: 'id',
+     autoIncrement: true
+   })
+   store.createIndex('by_date', 'date', { unique: false })
+   store.createIndex('by_task', 'taskId', { unique: false })
+ }
+ // v4: 每日学校作业（家长每天录入，按日期存储）
+ if (!db.objectStoreNames.contains('daily_homework')) {
+   const store = db.createObjectStore('daily_homework', {
+     keyPath: 'id',
+     autoIncrement: true
+   })
+   store.createIndex('by_date', 'date', { unique: false })
  }
  }
  })
@@ -267,6 +275,43 @@ export async function getDailyCheckinsByDate(date) {
 }
 
 export async function getAllDailyCheckins() {
- const db = await openDB()
- return db.getAll('daily_checkins')
+  const db = await openDB()
+  return db.getAll('daily_checkins')
+}
+
+// ----- daily_homework (v4): 每日学校作业 -----
+// homework: { date, tasks: [{ name, points, done }], source, createdAt }
+export async function addDailyHomework(homework) {
+  const db = await openDB()
+  return db.add('daily_homework', { ...homework, createdAt: Date.now() })
+}
+
+export async function getDailyHomeworkByDate(date) {
+  const db = await openDB()
+  return db.getAllFromIndex('daily_homework', 'by_date', date)
+}
+
+export async function getDailyHomeworkAll() {
+  const db = await openDB()
+  return db.getAll('daily_homework')
+}
+
+export async function updateDailyHomework(id, patch) {
+  const db = await openDB()
+  const tx = db.transaction('daily_homework', 'readwrite')
+  const store = tx.objectStore('daily_homework')
+  const existing = await store.get(id)
+  if (!existing) {
+    await tx.done
+    return null
+  }
+  const next = { ...existing, ...patch, id }
+  await store.put(next)
+  await tx.done
+  return next
+}
+
+export async function deleteDailyHomework(id) {
+  const db = await openDB()
+  await db.delete('daily_homework', id)
 }

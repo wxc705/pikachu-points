@@ -1,86 +1,128 @@
 <template>
   <div class="tt-page">
-    <!-- 顶部：日期 + 总积分 + 连续打卡 -->
-    <header class="tt-header">
-      <div class="tt-hd-chip tt-hd-date">
-        <span class="tt-hd-icon">📅</span>
-        <div class="tt-hd-col">
-          <span class="tt-hd-sub">{{ wdLabel }}</span>
-          <span class="tt-hd-label">{{ mdLabel }}</span>
-        </div>
-      </div>
-      <div class="tt-hd-chip tt-hd-points">
-        <span class="tt-hd-icon">⭐</span>
-        <div class="tt-hd-col">
-          <span class="tt-hd-label">积分</span>
-          <span class="tt-hd-num">{{ totalPointsText }}</span>
-        </div>
-      </div>
-      <div class="tt-hd-chip tt-hd-streak">
-        <span class="tt-hd-icon">🔥</span>
-        <div class="tt-hd-col">
-          <span class="tt-hd-label">连续</span>
-          <span class="tt-hd-num">{{ streak }}天</span>
-        </div>
-      </div>
-    </header>
+    <!-- 顶部英雄区（v4） -->
+    <HeroSection
+      :date="store.today"
+      :total-points="store.totalPoints"
+      :today-earned="store.todayTaskEarned + store.todayHomeworkEarned"
+      :streak="store.currentStreak"
+      :level="ultramanLevel"
+      :level-label="levelLabel"
+      :level-progress="levelProgress"
+      :level-next-days="levelNextDays"
+    />
+
+    <!-- 说话气泡（v4） -->
+    <SpeechBubble :text="bubbleText" :emoji="bubbleEmoji" :trigger="bubbleTrigger" />
+
+    <!-- 全勤庆祝（v4） -->
+    <AllDoneEffect :show="showAllDone" :total-earned="store.todayTaskEarned + store.todayHomeworkEarned" @close="showAllDone = false" />
 
     <!-- 主体：按 activeTab 切换 -->
     <main class="tt-body">
-      <!-- 今日任务 -->
+      <!-- 今日任务（v4 双栏：学校作业 + 自我拓展） -->
       <section v-if="activeTab === 'today'" class="tt-today">
-        <div class="tt-today-head">
-          <h2 class="tt-title">📋 今日任务</h2>
-          <span class="tt-earned">今日已得 +{{ store.todayTaskEarned }}分</span>
-        </div>
-
         <div v-if="loading" class="tt-loading" aria-label="加载中">⏳</div>
-        <div v-else-if="!store.todayTasks.length" class="tt-empty">
+        <div v-else-if="!store.todayTasks.length && !store.todayHomework.length" class="tt-empty">
           <div class="tt-empty-emoji">🎈</div>
           <div class="tt-empty-title">今天没有任务哦</div>
           <div class="tt-empty-hint">好好休息，去玩吧！</div>
         </div>
-        <div v-else class="tt-list">
-          <div
-            v-for="(task, i) in store.todayTasks"
-            :key="task.id"
-            class="tt-card-wrap"
-            :style="entryStyle(i)"
-          >
-            <div class="tt-card" :class="cardClass(task)" @click="tapTask(task)">
-              <div class="tt-card-slot">
-                <span class="tt-slot-icon">{{ slotIcon(task.timeSlot) }}</span>
-                <span class="tt-slot-text">{{ slotLabel(task.timeSlot) }}</span>
+        <div v-else class="tt-dual">
+          <!-- 左栏：学校作业 -->
+          <div class="tt-column" v-if="store.todayHomework.length">
+            <div class="tt-col-head">
+              <h2 class="tt-title">📚 学校作业</h2>
+              <span class="tt-earned">今日已得 +{{ store.todayHomeworkEarned }}分</span>
+            </div>
+            <div class="tt-list">
+              <div
+                v-for="(task, i) in store.todayHomework"
+                :key="task.key"
+                class="tt-card-wrap"
+                :style="entryStyle(i)"
+              >
+                <div class="tt-card" :class="{ 'is-done': task.done }" @click="tapHomework(task)">
+                  <div class="tt-card-mid">
+                    <span class="tt-card-emoji">{{ emojiForName(task.name) }}</span>
+                    <span class="tt-card-name">{{ task.name }}</span>
+                  </div>
+                  <div class="tt-card-right">
+                    <span class="tt-card-points">+{{ task.points }}</span>
+                    <button
+                      class="tt-card-btn"
+                      :class="{ 'is-done': task.done }"
+                      :disabled="task.done || busy.has(task.key)"
+                    >
+                      <span v-if="task.done">✓</span>
+                      <span v-else>打卡</span>
+                    </button>
+                  </div>
+                </div>
               </div>
-              <div class="tt-card-mid">
-                <span class="tt-card-emoji">{{ emojiForTask(task) }}</span>
-                <span class="tt-card-name">{{ task.name }}</span>
+            </div>
+            <div class="tt-col-progress">
+              <div class="tt-progress-bar">
+                <div class="tt-progress-fill" :style="{ width: homeworkProgressPct + '%' }"></div>
               </div>
-              <div class="tt-card-right">
-                <span class="tt-card-points">+{{ task.points }}</span>
-                <button
-                  class="tt-card-btn"
-                  :class="isDone(task) ? 'is-done' : ''"
-                  :disabled="isDone(task) || busy.has(task.id)"
-                >
-                  <span v-if="isDone(task)">✓</span>
-                  <span v-else>打卡</span>
-                </button>
+              <span class="tt-progress-text">{{ homeworkDoneCount }}/{{ store.todayHomework.length }} 完成</span>
+            </div>
+          </div>
+
+          <!-- 右栏：自我拓展 -->
+          <div class="tt-column" v-if="store.todayTasks.length">
+            <div class="tt-col-head">
+              <h2 class="tt-title">🌟 自我拓展</h2>
+              <span class="tt-earned">今日已得 +{{ store.todayTaskEarned }}分</span>
+            </div>
+            <div class="tt-list">
+              <div
+                v-for="(task, i) in store.todayTasks"
+                :key="task.id"
+                class="tt-card-wrap"
+                :style="entryStyle(i)"
+              >
+                <div class="tt-card" :class="cardClass(task)" @click="tapTask(task)">
+                  <div class="tt-card-slot">
+                    <span class="tt-slot-icon">{{ slotIcon(task.timeSlot) }}</span>
+                    <span class="tt-slot-text">{{ slotLabel(task.timeSlot) }}</span>
+                  </div>
+                  <div class="tt-card-mid">
+                    <span class="tt-card-emoji">{{ emojiForTask(task) }}</span>
+                    <span class="tt-card-name">{{ task.name }}</span>
+                  </div>
+                  <div class="tt-card-right">
+                    <span class="tt-card-points">+{{ task.points }}</span>
+                    <button
+                      class="tt-card-btn"
+                      :class="{ 'is-done': isDone(task) }"
+                      :disabled="isDone(task) || busy.has(task.id)"
+                    >
+                      <span v-if="isDone(task)">✓</span>
+                      <span v-else>打卡</span>
+                    </button>
+                  </div>
+                  <Transition name="tt-float">
+                    <span
+                      v-if="floating && floating.taskId === task.id"
+                      class="tt-float-points"
+                      :key="floating.nonce"
+                    >+{{ task.points }}</span>
+                  </Transition>
+                </div>
               </div>
-              <!-- 打卡成功 +N 上浮 -->
-              <Transition name="tt-float">
-                <span
-                  v-if="floating && floating.taskId === task.id"
-                  class="tt-float-points"
-                  :key="floating.nonce"
-                >+{{ task.points }}</span>
-              </Transition>
+            </div>
+            <div class="tt-col-progress">
+              <div class="tt-progress-bar">
+                <div class="tt-progress-fill" :style="{ width: expansionProgressPct + '%' }"></div>
+              </div>
+              <span class="tt-progress-text">{{ expansionDoneCount }}/{{ store.todayTasks.length }} 完成</span>
             </div>
           </div>
         </div>
       </section>
 
-      <!-- 积分 -->
+      <!-- 我的基地（v4：积分 + 成就墙） -->
       <section v-else-if="activeTab === 'points'" class="tt-points">
         <div class="tt-score-card">
           <span class="tt-score-label">💰 我的积分</span>
@@ -110,28 +152,144 @@
             <span class="tt-record-points" :class="c.pointsEarned < 0 ? 'is-neg' : ''">{{ c.pointsEarned > 0 ? '+' : '' }}{{ c.pointsEarned }}</span>
           </div>
         </div>
+        <!-- 成就墙 -->
+        <div class="tt-achieve">
+          <div class="tt-achieve-head">
+            <h3 class="tt-records-title">🏆 我的成就</h3>
+            <span class="tt-achieve-count">{{ store.unlockedCount }}/{{ store.ACHIEVEMENT_DEFS.length }}</span>
+          </div>
+          <div class="tt-achieve-grid">
+            <div
+              v-for="a in store.achievements"
+              :key="a.id"
+              class="tt-achieve-badge"
+              :class="{ 'is-locked': !a.unlocked }"
+              @click="selectedAchievement = a"
+            >
+              <span class="tt-achieve-emoji">{{ a.unlocked ? a.emoji : '🔒' }}</span>
+              <span class="tt-achieve-name">{{ a.unlocked ? a.name : '???' }}</span>
+            </div>
+          </div>
+        </div>
+        <!-- 成就详情弹窗 -->
+        <Teleport to="body">
+          <Transition name="tt-pop">
+            <div v-if="selectedAchievement" class="tt-confirm-overlay" @click.self="selectedAchievement = null">
+              <div class="tt-confirm-card">
+                <div class="tt-confirm-emoji">{{ selectedAchievement.unlocked ? selectedAchievement.emoji : '🔒' }}</div>
+                <div class="tt-confirm-name">{{ selectedAchievement.name }}</div>
+                <div class="tt-confirm-points" style="font-size:18px;color:#666;">{{ selectedAchievement.desc }}</div>
+                <div v-if="!selectedAchievement.unlocked" style="margin-top:8px;font-size:16px;color:#ea580c;font-weight:700;">
+                  继续努力，就能解锁！
+                </div>
+                <button class="tt-confirm-no" @click="selectedAchievement = null">关闭</button>
+              </div>
+            </div>
+          </Transition>
+        </Teleport>
       </section>
 
-      <!-- 申请（Phase 2 占位） -->
-      <section v-else-if="activeTab === 'apply'" class="tt-placeholder">
-        <div class="tt-ph-emoji">📝</div>
-        <div class="tt-ph-title">申请功能开发中</div>
-        <div class="tt-ph-hint">敬请期待</div>
+      <!-- 积分商城（v4） -->
+      <section v-else-if="activeTab === 'apply'" class="tt-mall">
+        <div class="tt-mall-header">
+          <h2 class="tt-title">🛒 积分商城</h2>
+          <span class="tt-mall-balance">当前 {{ totalPointsText }} 分</span>
+        </div>
+
+        <div v-if="!rewards.length" class="tt-empty">
+          <div class="tt-empty-emoji">🎁</div>
+          <div class="tt-empty-title">还没有奖品哦</div>
+          <div class="tt-empty-hint">让爸爸妈妈去添加奖品吧！</div>
+        </div>
+
+        <div v-else class="tt-mall-list">
+          <div
+            v-for="(reward, i) in rewards"
+            :key="reward.id"
+            class="tt-mall-card"
+            :class="{ 'is-affordable': canAfford(reward), 'is-expensive': !canAfford(reward) }"
+            :style="entryStyle(i)"
+            @click="tapReward(reward)"
+          >
+            <span class="tt-mall-emoji">{{ reward.emoji || '🎁' }}</span>
+            <div class="tt-mall-info">
+              <span class="tt-mall-name">{{ reward.name }}</span>
+              <span class="tt-mall-cost">{{ reward.points }} 分</span>
+            </div>
+            <div class="tt-mall-status">
+              <span v-if="canAfford(reward)" class="tt-mall-yes">✅ 可以兑换</span>
+              <span v-else class="tt-mall-no">⏳ 还差 {{ reward.points - store.totalPoints }} 分</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- 自定义愿望入口 -->
+        <button class="tt-mall-wish" @click="showWishInput = !showWishInput">
+          ✨ 自定义愿望
+        </button>
+        <div v-if="showWishInput" class="tt-wish-form">
+          <input
+            v-model="wishText"
+            placeholder="我想要..."
+            class="tt-wish-input"
+            @keyup.enter="submitWish"
+          />
+          <button class="tt-wish-btn" :disabled="!wishText.trim() || wishSaving" @click="submitWish">
+            {{ wishSaving ? '...' : '提交' }}
+          </button>
+        </div>
+        <p v-if="wishMsg" class="tt-wish-msg" :class="wishMsg.startsWith('✅') ? 'is-ok' : 'is-err'">{{ wishMsg }}</p>
+
+        <!-- 兑换确认弹窗 -->
+        <Teleport to="body">
+          <Transition name="tt-pop">
+            <div v-if="confirmReward" class="tt-confirm-overlay" @click.self="confirmReward = null">
+              <div class="tt-confirm-card">
+                <div class="tt-confirm-emoji">{{ confirmReward.emoji || '🎁' }}</div>
+                <div class="tt-confirm-name">{{ confirmReward.name }}</div>
+                <div class="tt-confirm-points">扣 {{ confirmReward.points }} 分</div>
+                <button class="tt-confirm-yes" :disabled="mallSubmitting" @click="onConfirmReward">✅ 兑换</button>
+                <button class="tt-confirm-no" @click="confirmReward = null">❌ 再想想</button>
+              </div>
+            </div>
+          </Transition>
+        </Teleport>
       </section>
 
-      <!-- 设置（占位 + 返回家长端） -->
-      <section v-else class="tt-placeholder">
-        <div class="tt-ph-emoji">⚙️</div>
-        <div class="tt-ph-title">设置功能开发中</div>
-        <a class="tt-ph-link" href="#/">👨‍👩‍👧 返回家长端</a>
+      <!-- 设置（v4：时间线 + 返回家长端） -->
+      <section v-else class="tt-settings-page">
+        <!-- 今日时间线 -->
+        <div class="tt-timeline">
+          <h2 class="tt-title">📅 今日安排</h2>
+          <div class="tt-tl-list">
+            <div
+              v-for="(slot, i) in timelineSlots"
+              :key="i"
+              class="tt-tl-slot"
+              :class="{ 'is-current': slot.state === 'current', 'is-past': slot.state === 'past' }"
+            >
+              <div class="tt-tl-time">
+                <span class="tt-tl-icon">{{ slot.icon }}</span>
+                <span class="tt-tl-hour">{{ slot.time }}</span>
+              </div>
+              <div class="tt-tl-line"></div>
+              <div class="tt-tl-content">{{ slot.label }}</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 设置入口 -->
+        <div class="tt-settings">
+          <a class="tt-settings-link" href="#/">👨‍👩‍👧 返回家长端</a>
+        </div>
       </section>
     </main>
 
     <!-- 底部导航：4 个大 tab，内部 ref 切换，不跳路由 -->
     <nav class="tt-tabs">
-      <button class="tt-tab" :class="{ 'is-active': activeTab === 'today' }" @click="activeTab = 'today'">📋 今日</button>
-      <button class="tt-tab" :class="{ 'is-active': activeTab === 'points' }" @click="activeTab = 'points'">🏆 积分</button>
-      <button class="tt-tab" :class="{ 'is-active': activeTab === 'apply' }" @click="activeTab = 'apply'">📝 申请</button>
+      <button class="tt-tab" :class="{ 'is-active': activeTab === 'today' }" @click="activeTab = 'today'">📋 冒险</button>
+      <button class="tt-tab" :class="{ 'is-active': activeTab === 'points' }" @click="activeTab = 'points'">🏆 基地</button>
+      <button class="tt-tab" :class="{ 'is-active': activeTab === 'apply' }" @click="activeTab = 'apply'">🛒 商城</button>
       <button class="tt-tab" :class="{ 'is-active': activeTab === 'settings' }" @click="activeTab = 'settings'">⚙️ 设置</button>
     </nav>
 
@@ -153,10 +311,14 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { usePointsStore } from '../stores/points.js'
 import { dateToWeekday, WEEKDAYS } from '../utils/weekday.js'
 import { playCoin, unlockAudio } from '../services/sound.js'
+import { speakEncouragement, speakAllDone, warmUpVoice } from '../services/voice.js'
+import HeroSection from '../components/HeroSection.vue'
+import SpeechBubble from '../components/SpeechBubble.vue'
+import AllDoneEffect from '../components/AllDoneEffect.vue'
 import './kid-style.css'
 
 const store = usePointsStore()
@@ -168,6 +330,98 @@ const submitting = ref(false)
 const busy = ref(new Set()) // 打卡后 3 秒防抖，防 6 岁孩子狂点
 const floating = ref(null) // { taskId, points, nonce }
 
+// v4 新状态
+const bubbleText = ref('')
+const bubbleEmoji = ref('⭐')
+const bubbleTrigger = ref(0)
+const showAllDone = ref(false)
+let _allDoneFired = false // 同一天只弹一次
+
+// v4: 积分商城
+const showWishInput = ref(false)
+const wishText = ref('')
+const wishSaving = ref(false)
+const wishMsg = ref('')
+const confirmReward = ref(null)
+const mallSubmitting = ref(false)
+
+// v4: 成就详情
+const selectedAchievement = ref(null)
+
+// v4: 今日时间线
+const DEFAULT_TIMELINE = [
+  { time: '早晨', icon: '🌅', label: '起床 + 洗漱 + 早餐', startMin: 0 },
+  { time: '8:20', icon: '🏫', label: '上学', startMin: 500 },
+  { time: '15:20', icon: '🏠', label: '放学', startMin: 920 },
+  { time: '16:00', icon: '📚', label: '完成作业', startMin: 960 },
+  { time: '17:00', icon: '🏃', label: '运动时间', startMin: 1020 },
+  { time: '18:00', icon: '🎮', label: '自由活动', startMin: 1080 },
+  { time: '20:00', icon: '🛁', label: '洗澡 + 睡前阅读', startMin: 1200 },
+  { time: '21:00', icon: '🌙', label: '睡觉', startMin: 1260 }
+]
+
+const timelineSlots = computed(() => {
+  const now = nowMinutes.value
+  return DEFAULT_TIMELINE.map((slot, i) => {
+    const nextStart = i < DEFAULT_TIMELINE.length - 1 ? DEFAULT_TIMELINE[i + 1].startMin : 9999
+    let state = 'future'
+    if (now >= nextStart) state = 'past'
+    else if (now >= slot.startMin) state = 'current'
+    return { ...slot, state }
+  })
+})
+
+// v4: 积分商城 — 奖品列表（projects 表中 category='兑换' 的项目）
+const rewards = computed(() => {
+  return store.projects.filter((p) => p.category === '兑换' && p.isActive !== false)
+})
+
+function canAfford(reward) {
+  return store.totalPoints >= (reward.points || 0)
+}
+
+async function tapReward(reward) {
+  if (!canAfford(reward)) {
+    wishMsg.value = `还差 ${reward.points - store.totalPoints} 分，继续努力！`
+    setTimeout(() => { wishMsg.value = '' }, 3000)
+    return
+  }
+  confirmReward.value = reward
+}
+
+async function onConfirmReward() {
+  const reward = confirmReward.value
+  if (!reward) return
+  mallSubmitting.value = true
+  try {
+    await store.addRequest(reward.name, reward.points, '商城兑换')
+    wishMsg.value = `✅ 已提交「${reward.name}」兑换申请`
+    confirmReward.value = null
+    setTimeout(() => { wishMsg.value = '' }, 3000)
+  } catch (e) {
+    wishMsg.value = '❌ 提交失败'
+  } finally {
+    mallSubmitting.value = false
+  }
+}
+
+async function submitWish() {
+  const text = wishText.value.trim()
+  if (!text) return
+  wishSaving.value = true
+  try {
+    await store.addRequest(text, 0, '自定义愿望')
+    wishMsg.value = `✅ 愿望「${text}」已提交`
+    wishText.value = ''
+    showWishInput.value = false
+    setTimeout(() => { wishMsg.value = '' }, 3000)
+  } catch (e) {
+    wishMsg.value = '❌ 提交失败'
+  } finally {
+    wishSaving.value = false
+  }
+}
+
 // 当前分钟数（自 0:00），每分钟刷新用于时段高亮
 function nowToMinutes() {
   const d = new Date()
@@ -175,7 +429,7 @@ function nowToMinutes() {
 }
 const nowMinutes = ref(nowToMinutes())
 
-// ---- 日期展示 ----
+// ---- 日期展示（HeroSection 内部处理，这里保留供底部 tab 用 ----
 const wdLabel = computed(() => {
   const [y, m, d] = store.today.split('-').map(Number)
   const wd = dateToWeekday(new Date(y, m - 1, d))
@@ -189,6 +443,52 @@ const mdLabel = computed(() => {
 
 const totalPointsText = computed(() => store.totalPoints.toLocaleString('en-US'))
 const streak = computed(() => store.currentStreak)
+
+// v4: 英雄区等级计算
+const ultramanLevel = computed(() => {
+  const s = streak.value
+  if (s >= 30) return 5
+  if (s >= 14) return 4
+  if (s >= 7) return 3
+  if (s >= 3) return 2
+  return 1
+})
+const levelLabel = computed(() => {
+  const s = streak.value
+  if (s === 0) return '准备变身'
+  return `奥特曼 Lv.${ultramanLevel.value}`
+})
+const LEVEL_THRESHOLDS = [0, 1, 3, 7, 14, 30] // 索引 0-5
+const levelProgress = computed(() => {
+  const s = streak.value
+  const lv = ultramanLevel.value
+  if (lv >= 5) return 100
+  const current = LEVEL_THRESHOLDS[lv] || 0
+  const next = LEVEL_THRESHOLDS[lv + 1] || 30
+  return Math.round(((s - current) / (next - current)) * 100)
+})
+const levelNextDays = computed(() => {
+  const s = streak.value
+  const lv = ultramanLevel.value
+  if (lv >= 5) return '已满级'
+  const next = LEVEL_THRESHOLDS[lv + 1] || 30
+  const diff = next - s
+  return `差 ${diff} 天升级`
+})
+
+// v4: 学校作业进度
+const homeworkDoneCount = computed(() => store.todayHomework.filter((t) => t.done).length)
+const homeworkProgressPct = computed(() => {
+  if (!store.todayHomework.length) return 0
+  return Math.round((homeworkDoneCount.value / store.todayHomework.length) * 100)
+})
+
+// v4: 拓展任务进度
+const expansionDoneCount = computed(() => store.todayTasks.filter((t) => isDone(t)).length)
+const expansionProgressPct = computed(() => {
+  if (!store.todayTasks.length) return 0
+  return Math.round((expansionDoneCount.value / store.todayTasks.length) * 100)
+})
 
 // 最近 10 条打卡记录（checkins 按 createdAt 倒序）
 const recentCheckins = computed(() =>
@@ -282,6 +582,47 @@ function onCancel() {
   if (confirmTask.value) setBusy(confirmTask.value.id, false)
   confirmTask.value = null
 }
+
+// v4: 全勤检测
+function checkAllDone() {
+  if (_allDoneFired) return
+  const hwAllDone = store.todayHomework.length > 0 && store.todayHomework.every((t) => t.done)
+  const expAllDone = store.todayTasks.length > 0 && store.todayTasks.every((t) => isDone(t))
+  // 至少有一区有任务且全部完成
+  if ((hwAllDone || expAllDone) && (store.todayHomework.length + store.todayTasks.length > 0)) {
+    _allDoneFired = true
+    const msg = speakAllDone()
+    bubbleText.value = msg
+    bubbleEmoji.value = '🏆'
+    bubbleTrigger.value++
+    setTimeout(() => { showAllDone.value = true }, 600)
+  }
+}
+
+// v4: 打卡学校作业
+async function tapHomework(task) {
+  if (task.done || busy.has(task.key)) return
+  setBusy(task.key, true)
+  setTimeout(() => setBusy(task.key, false), 3000)
+  try {
+    unlockAudio()
+    const res = await store.addHomeworkCheckin(task)
+    if (res) {
+      playCoin().catch(() => {})
+      // 语音鼓励 + 气泡
+      warmUpVoice()
+      const msg = speakEncouragement()
+      bubbleText.value = msg
+      bubbleEmoji.value = '⭐'
+      bubbleTrigger.value++
+      // 全勤检测
+      checkAllDone()
+    }
+  } catch (e) {
+    console.warn('[kid] homework checkin failed:', e)
+  }
+}
+
 async function onConfirm() {
   if (submitting.value) return
   const task = confirmTask.value
@@ -298,6 +639,14 @@ async function onConfirm() {
       setTimeout(() => {
         if (floating.value && floating.value.nonce === nonce) floating.value = null
       }, 900)
+      // v4: 语音鼓励 + 气泡
+      warmUpVoice()
+      const msg = speakEncouragement()
+      bubbleText.value = msg
+      bubbleEmoji.value = '⭐'
+      bubbleTrigger.value++
+      // v4: 全勤检测
+      checkAllDone()
     }
   } catch (e) {
     console.warn('[kid] task checkin failed:', e)
@@ -425,6 +774,49 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   gap: 16px;
+}
+/* v4: 双栏布局 */
+.tt-dual {
+  display: flex;
+  gap: 20px;
+}
+.tt-column {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+.tt-col-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.tt-col-progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 0;
+}
+.tt-progress-bar {
+  flex: 1;
+  height: 8px;
+  background: #eee;
+  border-radius: 999px;
+  overflow: hidden;
+}
+.tt-progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #ffb627, #ff8a00);
+  transition: width 0.4s ease;
+}
+.tt-progress-text {
+  font-size: 16px;
+  font-weight: 700;
+  color: #8a7a5a;
+  white-space: nowrap;
 }
 .tt-today-head {
   display: flex;
@@ -1010,6 +1402,289 @@ onBeforeUnmount(() => {
   0% { transform: scale(0); }
   60% { transform: scale(1.15); }
   100% { transform: scale(1); }
+}
+
+/* ============================================================
+   v4: 积分商城
+   ============================================================ */
+.tt-mall {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.tt-mall-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.tt-mall-balance {
+  font-size: 20px;
+  font-weight: 800;
+  color: #ffffff;
+  padding: 6px 16px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #ffb627, #ff8a00);
+  box-shadow: rgba(255, 138, 0, 0.3) 0px 3px 8px;
+}
+.tt-mall-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.tt-mall-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 18px;
+  border-radius: 20px;
+  background: #ffffff;
+  border: 2px solid #ffd97a;
+  box-shadow: rgba(0, 0, 0, 0.04) 0px 2px 6px, rgba(0, 0, 0, 0.08) 0px 4px 12px;
+  transition: transform 0.15s, box-shadow 0.15s;
+  cursor: pointer;
+}
+.tt-mall-card:active {
+  transform: scale(0.97);
+}
+.tt-mall-card.is-expensive {
+  opacity: 0.7;
+  border-color: #e5e7eb;
+}
+.tt-mall-emoji {
+  font-size: 36px;
+  line-height: 1;
+  flex: 0 0 auto;
+}
+.tt-mall-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.tt-mall-name {
+  font-size: 20px;
+  font-weight: 700;
+  color: #222;
+}
+.tt-mall-cost {
+  font-size: 16px;
+  font-weight: 600;
+  color: #8a7a5a;
+}
+.tt-mall-status {
+  flex: 0 0 auto;
+}
+.tt-mall-yes {
+  font-size: 16px;
+  font-weight: 700;
+  color: #16a34a;
+}
+.tt-mall-no {
+  font-size: 16px;
+  font-weight: 700;
+  color: #ea580c;
+}
+.tt-mall-wish {
+  width: 100%;
+  padding: 14px;
+  border-radius: 16px;
+  border: 2px dashed #ffd97a;
+  background: transparent;
+  font-size: 18px;
+  font-weight: 700;
+  color: #8a7a5a;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.tt-mall-wish:active {
+  background: rgba(255, 217, 122, 0.2);
+}
+.tt-wish-form {
+  display: flex;
+  gap: 8px;
+}
+.tt-wish-input {
+  flex: 1;
+  padding: 12px 16px;
+  border-radius: 12px;
+  border: 2px solid #ffd97a;
+  font-size: 18px;
+  font-weight: 600;
+  outline: none;
+  background: #fff;
+}
+.tt-wish-input:focus {
+  border-color: #ffb627;
+}
+.tt-wish-btn {
+  padding: 12px 24px;
+  border-radius: 12px;
+  border: none;
+  background: linear-gradient(135deg, #ffb627, #ff8a00);
+  color: #fff;
+  font-size: 18px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.tt-wish-btn:disabled {
+  opacity: 0.4;
+}
+.tt-wish-msg {
+  text-align: center;
+  font-size: 16px;
+  font-weight: 700;
+}
+.tt-wish-msg.is-ok { color: #16a34a; }
+.tt-wish-msg.is-err { color: #dc2626; }
+
+/* ============================================================
+   v4: 成就墙
+   ============================================================ */
+.tt-achieve {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.tt-achieve-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.tt-achieve-count {
+  font-size: 18px;
+  font-weight: 800;
+  color: #ea580c;
+}
+.tt-achieve-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+  gap: 12px;
+}
+.tt-achieve-badge {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 12px 8px;
+  border-radius: 16px;
+  background: linear-gradient(160deg, #fff9ec, #fff3dd);
+  border: 2px solid #ffd97a;
+  box-shadow: rgba(255, 183, 39, 0.12) 0 0 0 1px, rgba(0, 0, 0, 0.04) 0 2px 6px;
+  cursor: pointer;
+  transition: transform 0.15s;
+}
+.tt-achieve-badge:active {
+  transform: scale(0.95);
+}
+.tt-achieve-badge.is-locked {
+  background: #f3f4f6;
+  border-color: #e5e7eb;
+  opacity: 0.6;
+}
+.tt-achieve-emoji {
+  font-size: 32px;
+  line-height: 1;
+}
+.tt-achieve-name {
+  font-size: 12px;
+  font-weight: 700;
+  color: #666;
+  text-align: center;
+  line-height: 1.2;
+}
+
+/* ============================================================
+   v4: 设置入口
+   ============================================================ */
+.tt-settings {
+  margin-top: 24px;
+  text-align: center;
+}
+.tt-settings-link {
+  display: inline-block;
+  padding: 12px 32px;
+  border-radius: 16px;
+  background: #f3f4f6;
+  color: #666;
+  font-size: 18px;
+  font-weight: 700;
+  text-decoration: none;
+  transition: background 0.15s;
+}
+.tt-settings-link:active {
+  background: #e5e7eb;
+}
+
+/* ============================================================
+   v4: 今日时间线
+   ============================================================ */
+.tt-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 8px;
+}
+.tt-tl-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+.tt-tl-slot {
+  display: flex;
+  align-items: stretch;
+  gap: 12px;
+  min-height: 48px;
+}
+.tt-tl-time {
+  flex: 0 0 70px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 0;
+}
+.tt-tl-icon {
+  font-size: 20px;
+  line-height: 1;
+}
+.tt-tl-hour {
+  font-size: 15px;
+  font-weight: 700;
+  color: #666;
+  white-space: nowrap;
+}
+.tt-tl-line {
+  flex: 0 0 3px;
+  background: #e5e7eb;
+  border-radius: 2px;
+  margin: 4px 0;
+}
+.tt-tl-content {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  padding: 8px 14px;
+  font-size: 17px;
+  font-weight: 600;
+  color: #444;
+  border-radius: 12px;
+  transition: background 0.3s;
+}
+.tt-tl-slot.is-current .tt-tl-line {
+  background: linear-gradient(180deg, #ffb627, #ff8a00);
+  box-shadow: 0 0 8px rgba(255, 183, 39, 0.4);
+}
+.tt-tl-slot.is-current .tt-tl-content {
+  background: linear-gradient(135deg, rgba(255, 214, 102, 0.3), rgba(255, 236, 179, 0.3));
+  border-left: 3px solid #ffb627;
+  font-weight: 800;
+  color: #222;
+}
+.tt-tl-slot.is-past .tt-tl-hour {
+  color: #bbb;
+}
+.tt-tl-slot.is-past .tt-tl-content {
+  color: #bbb;
 }
 
 /* 大屏（iPad/学习机横屏）字体再放大 */

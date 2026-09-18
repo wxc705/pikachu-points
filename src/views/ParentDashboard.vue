@@ -68,6 +68,55 @@
       </div>
     </section>
 
+    <!-- 📝 今日作业（v4 新增） -->
+    <section class="rounded-2xl bg-surface shadow-sm p-4 space-y-3">
+      <h2 class="font-bold text-sm flex items-center gap-1.5">
+        📝 今日作业
+        <span v-if="store.todayHomework.length" class="text-xs font-normal text-ink-soft">（{{ store.todayHomeworkDoneCount }}/{{ store.todayHomework.length }} 已完成）</span>
+      </h2>
+      <!-- 已有作业展示 -->
+      <div v-if="store.todayHomework.length && !hwEditing" class="space-y-2">
+        <ul class="space-y-1.5 text-sm">
+          <li v-for="t in store.todayHomework" :key="t.key" class="flex items-center justify-between py-1">
+            <span :class="t.done ? 'line-through text-ink-soft' : ''">{{ t.name }}</span>
+            <span class="text-secondary font-bold">+{{ t.points }} {{ t.done ? '✓' : '' }}</span>
+          </li>
+        </ul>
+        <button @click="hwEditing = true" class="w-full py-2 rounded-xl bg-primary-soft/70 text-ink text-xs font-semibold hover:bg-primary transition-colors btn-press">
+          ✏️ 修改今日作业
+        </button>
+      </div>
+      <!-- 录入/编辑 -->
+      <div class="space-y-2">
+        <textarea
+          v-model="hwRawText"
+          rows="4"
+          placeholder="粘贴老师布置的作业，如：&#10;语文预习第三课&#10;数学口算20道&#10;英语跟读Unit 2&#10;练字15分钟"
+          class="w-full rounded-xl bg-primary-soft/50 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary transition-all resize-none"
+        ></textarea>
+        <div class="flex gap-2">
+          <button @click="parseHomework" :disabled="!hwRawText.trim()" class="flex-1 py-2.5 rounded-xl bg-primary text-ink text-xs font-semibold hover:bg-primary-soft disabled:opacity-40 transition-colors btn-press">
+            🔍 解析作业
+          </button>
+          <button v-if="hwParsed.length" @click="saveHomework" :disabled="hwSaving" class="flex-1 py-2.5 rounded-xl bg-secondary text-white text-xs font-semibold hover:opacity-90 disabled:opacity-40 transition-all btn-press">
+            {{ hwSaving ? '保存中...' : '✅ 保存' }}
+          </button>
+        </div>
+        <!-- 解析结果预览 -->
+        <div v-if="hwParsed.length" class="space-y-1.5">
+          <p class="text-xs text-ink-soft font-medium">解析结果（点击可删除）：</p>
+          <div v-for="(t, i) in hwParsed" :key="i" class="flex items-center gap-2 text-sm">
+            <span class="flex-1">{{ t.name }}</span>
+            <input v-model.number="t.points" type="number" min="1" max="10" class="w-14 rounded-lg bg-primary-soft/50 px-2 py-1 text-xs text-center" />
+            <span class="text-xs text-ink-soft">分</span>
+            <button @click="hwParsed.splice(i, 1)" class="text-red-400 text-xs hover:text-red-600">✕</button>
+          </div>
+          <button @click="hwParsed.push({ name: '', points: 2 })" class="text-xs text-secondary font-semibold hover:underline">+ 添加一条</button>
+        </div>
+        <p v-if="hwMsg" class="text-xs text-center font-medium" :class="hwMsg.startsWith('✅') ? 'text-green-600' : 'text-red-500'">{{ hwMsg }}</p>
+      </div>
+    </section>
+
     <!-- 今日打卡 -->
     <section v-if="todayCheckins.length" class="rounded-2xl bg-surface shadow-sm p-4">
       <h2 class="font-bold text-sm mb-2.5">✅ 今日已打卡（{{ todayCheckins.length }} 项）</h2>
@@ -113,6 +162,13 @@ const syncMsg = ref('')
 const grantAmount = ref(null)
 const grantReason = ref('')
 const grantError = ref('')
+
+// v4: 今日作业
+const hwRawText = ref('')
+const hwParsed = ref([])
+const hwEditing = ref(false)
+const hwSaving = ref(false)
+const hwMsg = ref('')
 
 const pendingRequests = computed(() => store.requests.filter((r) => r.status === 'pending'))
 const todayCheckins = computed(() => store.checkins.filter((c) => c.date === store.today))
@@ -176,6 +232,45 @@ async function onGrant() {
     pts > 0 ? playCoin() : playError()
     grantAmount.value = null; grantReason.value = ''
   } catch (e) { playError(); grantError.value = '拨付失败' }
+}
+
+// v4: 解析作业文本 → 任务列表
+function parseHomework() {
+  hwMsg.value = ''
+  const raw = hwRawText.value.trim()
+  if (!raw) return
+  // 按换行/分号/句号拆行，过滤空行
+  const lines = raw.split(/[\n;；。]/).map((l) => l.trim()).filter(Boolean)
+  if (!lines.length) { hwMsg.value = '未识别到作业条目'; return }
+  hwParsed.value = lines.map((line) => {
+    let name = line.replace(/^[\d]+[.、)\]）]\s*/, '').trim() // 去掉开头序号
+    let points = 2 // 默认 2 分
+    // 关键词匹配自动设分值
+    if (/练字|写字/.test(name)) points = 3
+    if (/阅读|读书/.test(name)) points = 2
+    return { name, points }
+  })
+  hwEditing.value = true
+}
+
+// v4: 保存今日作业
+async function saveHomework() {
+  hwMsg.value = ''
+  const tasks = hwParsed.value.filter((t) => t.name.trim())
+  if (!tasks.length) { hwMsg.value = '请至少添加一条作业'; return }
+  hwSaving.value = true
+  try {
+    await store.saveTodayHomework(tasks)
+    hwMsg.value = `✅ 已保存 ${tasks.length} 条作业`
+    hwEditing.value = false
+    hwParsed.value = []
+    hwRawText.value = ''
+    setTimeout(() => { hwMsg.value = '' }, 3000)
+  } catch (e) {
+    hwMsg.value = '❌ 保存失败'
+  } finally {
+    hwSaving.value = false
+  }
 }
 
 onMounted(() => { store.load() })

@@ -19,7 +19,10 @@ import {
   getAllWeeklyTasks as dbGetAllWeeklyTasks,
   addWeeklyTask as dbAddWeeklyTask,
   getAllDailyCheckins as dbGetAllDailyCheckins,
-  addDailyCheckin as dbAddDailyCheckin
+  addDailyCheckin as dbAddDailyCheckin,
+  getDailyHomeworkAll as dbGetAllDailyHomework,
+  addDailyHomework as dbAddDailyHomework,
+  updateDailyHomework as dbUpdateDailyHomework
 } from '../services/db.js'
 import { DEFAULT_THEME_ID, getTheme } from '../themes/index.js'
 import { WEEKLY_TASKS_SEED } from '../services/weeklyTasksSeed.js'
@@ -83,6 +86,7 @@ export const usePointsStore = defineStore('points', () => {
  const weeklyPlans = ref([]) // { weekday, projectIds }[]
  const weeklyTasks = ref([]) // 每周任务配置（QC 课表）
  const dailyCheckins = ref([]) // 任务打卡记录
+ const dailyHomework = ref([]) // 每日学校作业记录
  const loaded = ref(false)
 
  const approvedRequests = computed(() =>
@@ -155,22 +159,24 @@ export const usePointsStore = defineStore('points', () => {
  })
 
  async function load(force = false) {
- if (loaded.value && !force) return
- const [c, r, p, w, wt, dc] = await Promise.all([
- getAllCheckins(),
- getAllRequests(),
- dbGetProjects(),
- dbGetAllWeeklyPlans(),
- dbGetAllWeeklyTasks(),
- dbGetAllDailyCheckins()
- ])
- checkins.value = c
- requests.value = r
- projects.value = p
- weeklyPlans.value = w
- weeklyTasks.value = wt
- dailyCheckins.value = dc
- loaded.value = true
+  if (loaded.value && !force) return
+  const [c, r, p, w, wt, dc, dh] = await Promise.all([
+   getAllCheckins(),
+   getAllRequests(),
+   dbGetProjects(),
+   dbGetAllWeeklyPlans(),
+   dbGetAllWeeklyTasks(),
+   dbGetAllDailyCheckins(),
+   dbGetAllDailyHomework()
+  ])
+  checkins.value = c
+  requests.value = r
+  projects.value = p
+  weeklyPlans.value = w
+  weeklyTasks.value = wt
+  dailyCheckins.value = dc
+  dailyHomework.value = dh
+  loaded.value = true
  // 首次进入即导入课表种子，保证今天就有任务可点
  await seedWeeklyTasksIfEmpty()
  }
@@ -391,9 +397,134 @@ export const usePointsStore = defineStore('points', () => {
   dailyCheckins.value = [...dailyCheckins.value, dailyEntry]
   checkins.value = [...checkins.value, checkinEntry]
   return { dailyEntry, checkinEntry }
- }
+  }
 
- // 里程碑状态
+  // ----- v4: 每日学校作业 -----
+
+  // 今日学校作业（从 daily_homework 表读取当天记录）
+  const todayHomework = computed(() => {
+   const entry = dailyHomework.value.find((h) => h.date === today.value)
+   if (!entry || !entry.tasks) return []
+   return entry.tasks.map((t, i) => ({
+    ...t,
+    id: `hw:${today.value}:${i}`,
+    category: '学校',
+    key: `homework:${today.value}:${i}`
+   }))
+  })
+
+  // 今日学校作业已完成数
+  const todayHomeworkDoneCount = computed(() => {
+   return todayHomework.value.filter((t) => t.done).length
+  })
+
+  // 今日学校作业所得积分
+  const todayHomeworkEarned = computed(() => {
+   return todayHomework.value
+    .filter((t) => t.done)
+    .reduce((s, t) => s + (t.points || 0), 0)
+  })
+
+  // 打卡学校作业（标记 done=true + 写 checkins 积分记账）
+  async function addHomeworkCheckin(task) {
+   const entry = dailyHomework.value.find((h) => h.date === today.value)
+   if (!entry) return null
+   const hwIdx = parseInt(task.id.split(':')[2], 10)
+   if (isNaN(hwIdx) || !entry.tasks[hwIdx] || entry.tasks[hwIdx].done) return null
+   entry.tasks[hwIdx].done = true
+   await dbUpdateDailyHomework(entry.id, { tasks: entry.tasks })
+   dailyHomework.value = [...dailyHomework.value]
+   const checkinEntry = {
+    projectId: null,
+    projectName: task.name,
+    category: '学校',
+    pointsEarned: task.points,
+    homeworkId: entry.id,
+    homeworkIndex: hwIdx,
+    checkedBy: 'kid',
+    date: today.value,
+    createdAt: Date.now()
+   }
+   await dbAddCheckin(checkinEntry)
+   checkins.value = [...checkins.value, checkinEntry]
+   return { homeworkEntry: entry, checkinEntry }
+  }
+
+  // 家长端：写入今日学校作业（覆盖写入，同一天只保留最新）
+  async function saveTodayHomework(tasks) {
+   const existing = dailyHomework.value.find((h) => h.date === today.value)
+   const payload = {
+    date: today.value,
+    tasks: tasks.map((t) => ({
+     name: t.name,
+     points: t.points || 2,
+     done: false
+    })),
+    source: '家长录入'
+   }
+   if (existing) {
+    const next = await dbUpdateDailyHomework(existing.id, payload)
+    if (next) {
+     dailyHomework.value = dailyHomework.value.map((h) => (h.id === existing.id ? next : h))
+    }
+    return next
+   } else {
+    const id = await dbAddDailyHomework(payload)
+    const stored = { ...payload, id }
+    dailyHomework.value = [...dailyHomework.value, stored]
+    return stored
+   }
+  }
+
+  // ----- v4: 成就系统 -----
+
+  const ACHIEVEMENT_DEFS = [
+   { id: 'first', name: '初次打卡', emoji: '🔥', desc: '第一次完成任务' },
+   { id: '100', name: '百分选手', emoji: '⭐', desc: '累计获得 100 分' },
+   { id: '500', name: '五百分侠', emoji: '💎', desc: '累计获得 500 分' },
+   { id: '1000', name: '千分王者', emoji: '👑', desc: '累计获得 1000 分' },
+   { id: '5000', name: '万分传说', emoji: '🌈', desc: '累计获得 5000 分' },
+   { id: 'streak3', name: '三日连续', emoji: '🔥', desc: '连续打卡 3 天' },
+   { id: 'streak7', name: '七日达人', emoji: '⭐', desc: '连续打卡 7 天' },
+   { id: 'streak14', name: '半月英雄', emoji: '🏆', desc: '连续打卡 14 天' },
+   { id: 'streak30', name: '月度冠军', emoji: '👑', desc: '连续打卡 30 天' },
+   { id: 'read30', name: '阅读小达人', emoji: '📚', desc: '阅读任务累计 30 次' },
+   { id: 'chess30', name: '象棋小王子', emoji: '♟️', desc: '国象任务累计 30 次' },
+   { id: 'write30', name: '练字高手', emoji: '✏️', desc: '练字任务累计 30 次' },
+   { id: 'sport30', name: '运动健将', emoji: '💪', desc: '运动任务累计 30 次' }
+  ]
+
+  function countByCategory(category) {
+   return checkins.value.filter((c) => c.category === category).length
+  }
+
+  const achievements = computed(() => {
+   const total = totalEarned.value
+   const s = currentStreak.value
+   return ACHIEVEMENT_DEFS.map((def) => {
+    let unlocked = false
+    switch (def.id) {
+     case 'first': unlocked = checkins.value.length > 0; break
+     case '100': unlocked = total >= 100; break
+     case '500': unlocked = total >= 500; break
+     case '1000': unlocked = total >= 1000; break
+     case '5000': unlocked = total >= 5000; break
+     case 'streak3': unlocked = s >= 3; break
+     case 'streak7': unlocked = s >= 7; break
+     case 'streak14': unlocked = s >= 14; break
+     case 'streak30': unlocked = s >= 30; break
+     case 'read30': unlocked = countByCategory('阅读') >= 30; break
+     case 'chess30': unlocked = countByCategory('国象') >= 30; break
+     case 'write30': unlocked = countByCategory('写字') >= 30; break
+     case 'sport30': unlocked = countByCategory('运动') >= 30; break
+    }
+    return { ...def, unlocked }
+   })
+  })
+
+  const unlockedCount = computed(() => achievements.value.filter((a) => a.unlocked).length)
+
+  // 里程碑状态
  const reachedMilestones = ref(loadReached())
  const pendingMilestone = ref(null)
 
@@ -547,6 +678,17 @@ export const usePointsStore = defineStore('points', () => {
  syncPushToCloud,
  syncPullFromCloud,
  syncBothWays,
- clearCloud
- }
+ clearCloud,
+ // v4: 每日学校作业
+ dailyHomework,
+ todayHomework,
+ todayHomeworkDoneCount,
+ todayHomeworkEarned,
+ addHomeworkCheckin,
+ saveTodayHomework,
+ // v4: 成就系统
+ achievements,
+ unlockedCount,
+ ACHIEVEMENT_DEFS
+}
 })
