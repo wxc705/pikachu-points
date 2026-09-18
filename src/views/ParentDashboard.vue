@@ -261,7 +261,7 @@ async function saveHomework() {
   hwSaving.value = true
   try {
     await store.saveTodayHomework(tasks)
-    hwMsg.value = `✅ 已保存 ${tasks.length} 条作业`
+    hwMsg.value = `✅ 已追加 ${tasks.length} 条作业`
     hwEditing.value = false
     hwParsed.value = []
     hwRawText.value = ''

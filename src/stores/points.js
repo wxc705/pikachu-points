@@ -450,16 +450,23 @@ export const usePointsStore = defineStore('points', () => {
    return { homeworkEntry: entry, checkinEntry }
   }
 
-  // 家长端：写入今日学校作业（覆盖写入，同一天只保留最新）
+  // 家长端：写入今日学校作业（追加模式，同名任务不重复）
   async function saveTodayHomework(tasks) {
    const existing = dailyHomework.value.find((h) => h.date === today.value)
+   let mergedTasks = tasks.map((t) => ({
+    name: t.name,
+    points: t.points || 2,
+    done: false
+   }))
+   if (existing && existing.tasks) {
+    // 追加：已有任务保留（含 done 状态），新任务按名去重追加
+    const existingNames = new Set(existing.tasks.map((t) => t.name))
+    const newTasks = mergedTasks.filter((t) => !existingNames.has(t.name))
+    mergedTasks = [...existing.tasks, ...newTasks]
+   }
    const payload = {
     date: today.value,
-    tasks: tasks.map((t) => ({
-     name: t.name,
-     points: t.points || 2,
-     done: false
-    })),
+    tasks: mergedTasks,
     source: '家长录入'
    }
    if (existing) {
