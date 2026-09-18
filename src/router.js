@@ -19,7 +19,11 @@ function isIPad() {
 }
 
 const routes = [
- { path: '/', name: 'home', component: Home },
+ { path: '/', name: 'home', component: Home, beforeEnter(to, from, next) {
+  // iPad 添加到主屏幕后打开 → 直接进 kid 端
+  if (isIPad()) next('/kid/today')
+  else next()
+ } },
  { path: '/checkin', name: 'checkin', component: Checkin },
  { path: '/exchange', name: 'exchange', component: Exchange },
  { path: '/history', name: 'history', component: History },
