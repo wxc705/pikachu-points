@@ -9,7 +9,7 @@
    ============================================================ */
 
 /* 进入儿童端时隐藏家长端顶部导航（body class 由 KidHome 挂载/卸载时切换） */
-body.kid-mode header {
+body.kid-mode header:not(.hero) {
   display: none;
 }
 
