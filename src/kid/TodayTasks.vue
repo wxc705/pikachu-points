@@ -1,22 +1,45 @@
 <template>
-  <div class="tt-page">
-    <!-- 顶部英雄区（v4） -->
-    <HeroSection
-      :date="store.today"
-      :total-points="store.totalPoints"
-      :today-earned="store.todayTaskEarned + store.todayHomeworkEarned"
-      :streak="store.currentStreak"
-      :level="ultramanLevel"
-      :level-label="levelLabel"
-      :level-progress="levelProgress"
-      :level-next-days="levelNextDays"
-    />
+  <div class="tt-page" :class="{ 'tt-page--sidebar': isIPad }">
+    <!-- 左侧导航栏（v4.1 iPad 横版） -->
+    <nav v-if="isIPad" class="tt-sidebar">
+      <div class="sb-avatar">
+        <span class="sb-avatar-emoji">{{ ultramanEmoji }}</span>
+        <span class="sb-avatar-level">{{ levelLabel }}</span>
+      </div>
+      <button class="sb-item" :class="{ 'is-active': activeTab === 'today' }" @click="activeTab = 'today'">📋 冒险</button>
+      <button class="sb-item" :class="{ 'is-active': activeTab === 'points' }" @click="activeTab = 'points'">🏆 基地</button>
+      <button class="sb-item" :class="{ 'is-active': activeTab === 'apply' }" @click="activeTab = 'apply'">🛒 商城</button>
+      <button class="sb-item" :class="{ 'is-active': activeTab === 'settings' }" @click="activeTab = 'settings'">⚙️ 设置</button>
+      <div class="sb-spacer"></div>
+      <a class="sb-item sb-parent" href="#/">👨‍👩‍👧</a>
+    </nav>
 
-    <!-- 说话气泡（v4） -->
-    <SpeechBubble :text="bubbleText" :emoji="bubbleEmoji" :trigger="bubbleTrigger" />
+    <!-- 主内容区 -->
+    <div class="tt-main-area">
+      <!-- 顶部英雄区（v4） -->
+      <HeroSection
+        :date="store.today"
+        :total-points="store.totalPoints"
+        :today-earned="store.todayTaskEarned + store.todayHomeworkEarned"
+        :streak="store.currentStreak"
+        :level="ultramanLevel"
+        :level-label="levelLabel"
+        :level-progress="levelProgress"
+        :level-next-days="levelNextDays"
+      />
 
-    <!-- 全勤庆祝（v4） -->
-    <AllDoneEffect :show="showAllDone" :total-earned="store.todayTaskEarned + store.todayHomeworkEarned" @close="showAllDone = false" />
+      <!-- 时段指示器（v4.1） -->
+      <div v-if="isIPad && currentTimelineSlot" class="tt-time-indicator">
+        <span class="tti-left">{{ currentTimelineSlot.icon }} {{ currentTimelineSlot.label }} ({{ currentTimelineSlot.time }})</span>
+        <span v-if="nextTimelineSlot" class="tti-right">下一个：{{ nextTimelineSlot.label }} 还有 {{ minutesUntilNext }} 分钟</span>
+        <span v-else class="tti-right tti-done">今天的任务都完成啦！</span>
+      </div>
+
+      <!-- 说话气泡（v4） -->
+      <SpeechBubble :text="bubbleText" :emoji="bubbleEmoji" :trigger="bubbleTrigger" />
+
+      <!-- 全勤庆祝（v4） -->
+      <AllDoneEffect :show="showAllDone" :total-earned="store.todayTaskEarned + store.todayHomeworkEarned" @close="showAllDone = false" />
 
     <!-- 主体：按 activeTab 切换 -->
     <main class="tt-body">
@@ -292,9 +315,10 @@
         </div>
       </section>
     </main>
+    </div><!-- /tt-main-area -->
 
-    <!-- 底部导航：4 个大 tab，内部 ref 切换，不跳路由 -->
-    <nav class="tt-tabs">
+    <!-- 底部导航：手机竖版用（iPad 用左侧栏） -->
+    <nav v-if="!isIPad" class="tt-tabs">
       <button class="tt-tab" :class="{ 'is-active': activeTab === 'today' }" @click="activeTab = 'today'">📋 冒险</button>
       <button class="tt-tab" :class="{ 'is-active': activeTab === 'points' }" @click="activeTab = 'points'">🏆 基地</button>
       <button class="tt-tab" :class="{ 'is-active': activeTab === 'apply' }" @click="activeTab = 'apply'">🛒 商城</button>
@@ -438,6 +462,13 @@ function nowToMinutes() {
 const nowMinutes = ref(nowToMinutes())
 
 // ---- 日期展示（HeroSection 内部处理，这里保留供底部 tab 用 ----
+
+// v4.1: iPad 检测
+const isIPad = computed(() => {
+  if (typeof navigator === 'undefined') return false
+  const ua = navigator.userAgent
+  return /iPad/i.test(ua) || (/Macintosh/i.test(ua) && navigator.maxTouchPoints > 1)
+})
 const wdLabel = computed(() => {
   const [y, m, d] = store.today.split('-').map(Number)
   const wd = dateToWeekday(new Date(y, m - 1, d))
@@ -482,6 +513,32 @@ const levelNextDays = computed(() => {
   const next = LEVEL_THRESHOLDS[lv + 1] || 30
   const diff = next - s
   return `差 ${diff} 天升级`
+})
+
+// v4.1: 奥特曼 emoji 映射
+const ULTRAMAN_EMOJIS = ['⚡', '🦸', '🦸‍♂️', '🌟', '🌍', '💎', '👑']
+const ultramanEmoji = computed(() => {
+  const lv = ultramanLevel.value
+  return ULTRAMAN_EMOJIS[Math.min(lv - 1, ULTRAMAN_EMOJIS.length - 1)] || '⚡'
+})
+
+// v4.1: 时段指示器
+const currentTimelineSlot = computed(() => {
+  const now = nowMinutes.value
+  for (let i = DEFAULT_TIMELINE.length - 1; i >= 0; i--) {
+    if (now >= DEFAULT_TIMELINE[i].startMin) return { ...DEFAULT_TIMELINE[i], index: i }
+  }
+  return null
+})
+const nextTimelineSlot = computed(() => {
+  const cur = currentTimelineSlot.value
+  if (!cur || cur.index >= DEFAULT_TIMELINE.length - 1) return null
+  return DEFAULT_TIMELINE[cur.index + 1]
+})
+const minutesUntilNext = computed(() => {
+  const next = nextTimelineSlot.value
+  if (!next) return 0
+  return Math.max(0, next.startMin - nowMinutes.value)
 })
 
 // v4: 学校作业进度
@@ -1707,6 +1764,95 @@ onBeforeUnmount(() => {
 .tt-tl-slot.is-past .tt-tl-content {
   color: #bbb;
 }
+
+/* ============================================================
+   v4.1: 左侧导航栏布局
+   ============================================================ */
+.tt-page--sidebar {
+  display: flex;
+  flex-direction: row;
+  min-height: 100vh;
+  min-height: 100dvh;
+}
+.tt-sidebar {
+  flex: 0 0 90px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 16px 0;
+  background: linear-gradient(180deg, #1a1a2e 0%, #16213e 100%);
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+}
+.sb-avatar {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 0 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  width: 100%;
+  margin-bottom: 8px;
+}
+.sb-avatar-emoji { font-size: 36px; line-height: 1; }
+.sb-avatar-level { font-size: 12px; font-weight: 700; color: rgba(255, 255, 255, 0.7); }
+.sb-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  width: 100%;
+  padding: 10px 8px;
+  border: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  text-decoration: none;
+  border-left: 3px solid transparent;
+}
+.sb-item:hover { background: rgba(255, 255, 255, 0.05); }
+.sb-item.is-active {
+  color: #fff;
+  font-size: 15px;
+  font-weight: 800;
+  border-left-color: #ffb627;
+  background: rgba(255, 182, 39, 0.1);
+}
+.sb-spacer { flex: 1; }
+.sb-parent {
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 20px;
+  padding: 12px 0;
+}
+.tt-main-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow-y: auto;
+}
+
+/* ============================================================
+   v4.1: 时段指示器
+   ============================================================ */
+.tt-time-indicator {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 20px;
+  margin: 0 20px;
+  background: rgba(26, 26, 46, 0.85);
+  border-radius: 12px;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+}
+.tti-left { display: flex; align-items: center; gap: 6px; }
+.tti-right { font-size: 14px; color: rgba(255, 255, 255, 0.7); }
+.tti-done { color: #4ade80; }
 
 /* 大屏（iPad/学习机横屏）字体再放大 */
 @media (min-width: 640px) {
