@@ -30,12 +30,16 @@
         </div>
         <div v-else class="tt-dual">
           <!-- 左栏：学校作业 -->
-          <div class="tt-column" v-if="store.todayHomework.length">
+          <div class="tt-column">
             <div class="tt-col-head">
               <h2 class="tt-title">📚 学校作业</h2>
-              <span class="tt-earned">今日已得 +{{ store.todayHomeworkEarned }}分</span>
+              <span class="tt-earned" v-if="store.todayHomework.length">今日已得 +{{ store.todayHomeworkEarned }}分</span>
             </div>
-            <div class="tt-list">
+            <div v-if="!store.todayHomework.length" class="tt-col-empty">
+              <span class="tt-col-empty-emoji">📝</span>
+              <span class="tt-col-empty-text">还没有作业哦</span>
+            </div>
+            <div v-else class="tt-list">
               <div
                 v-for="(task, i) in store.todayHomework"
                 :key="task.key"
@@ -70,12 +74,16 @@
           </div>
 
           <!-- 右栏：自我拓展 -->
-          <div class="tt-column" v-if="store.todayTasks.length">
+          <div class="tt-column">
             <div class="tt-col-head">
               <h2 class="tt-title">🌟 自我拓展</h2>
-              <span class="tt-earned">今日已得 +{{ store.todayTaskEarned }}分</span>
+              <span class="tt-earned" v-if="store.todayTasks.length">今日已得 +{{ store.todayTaskEarned }}分</span>
             </div>
-            <div class="tt-list">
+            <div v-if="!store.todayTasks.length" class="tt-col-empty">
+              <span class="tt-col-empty-emoji">🌟</span>
+              <span class="tt-col-empty-text">今天没有拓展任务</span>
+            </div>
+            <div v-else class="tt-list">
               <div
                 v-for="(task, i) in store.todayTasks"
                 :key="task.id"
@@ -818,6 +826,19 @@ onBeforeUnmount(() => {
   color: #8a7a5a;
   white-space: nowrap;
 }
+/* 栏内空态 */
+.tt-col-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 32px 16px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.5);
+  border: 2px dashed #e5e7eb;
+}
+.tt-col-empty-emoji { font-size: 36px; }
+.tt-col-empty-text { font-size: 18px; font-weight: 600; color: #999; }
 .tt-today-head {
   display: flex;
   align-items: center;

@@ -15,9 +15,9 @@ body.kid-mode header:not(.hero) {
 
 /* App.vue 的 <main> 默认 max-w-3xl + px-4 py-5，儿童端改为自己控制版心与留白 */
 body.kid-mode main {
-  max-width: 760px;
+  max-width: none;
   margin: 0 auto;
-  padding: 0;
+  padding: 0 20px;
 }
 
 /* ---- 页面容器：温暖奶油渐变 + 顶部奥特曼氛围光 ---- */
