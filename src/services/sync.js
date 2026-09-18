@@ -3,7 +3,7 @@
 // 当前实现：Supabase（真云端，跨设备同步）
 // 未来：可以一行 import 切到 localStorage 模式（fallback）
 
-import { getAllCheckins, getAllRequests, getProjects, putCheckin, putProject, putExchangeRequest, getAllWeeklyPlans, setWeeklyPlan } from './db.js'
+import { getAllCheckins, getAllRequests, getProjects, putCheckin, putProject, putExchangeRequest, getAllWeeklyPlans, setWeeklyPlan, getDailyHomeworkAll, putDailyHomework } from './db.js'
 import { supabase, isSupabaseConfigured } from './supabase.js'
 
 // ---- 状态订阅 ----
@@ -127,6 +127,22 @@ export async function push() {
      pushed += rows.length
    } catch (e) { errors.push({ table: 'weekly_plan', error: e.message || String(e) }) }
  }
+ // daily_homework (v4)
+ const dailyHomework = await getDailyHomeworkAll()
+ if (dailyHomework.length) {
+   const rows = dailyHomework.map((h) => ({
+     id: h.id,
+     date: h.date,
+     tasks: h.tasks,
+     source: h.source,
+     created_at: h.createdAt ? new Date(h.createdAt).toISOString() : nowIso()
+   }))
+   try {
+     const { error } = await supabase.from('daily_homework').upsert(rows, { onConflict: 'id' })
+     if (error) throw error
+     pushed += rows.length
+   } catch (e) { errors.push({ table: 'daily_homework', error: e.message || String(e) }) }
+ }
 
  const ts = nowIso()
  state.lastSyncedAt = ts
@@ -158,11 +174,12 @@ export async function pull() {
  try {
  // 逐表拉取，表不存在/无权访问只记错误，不连坐其他表（核心打卡/兑换数据优先）
  const pullErrors = []
- const [cr, rr, pr, wr] = await Promise.allSettled([
+ const [cr, rr, pr, wr, dhr] = await Promise.allSettled([
    supabase.from('checkins').select('*'),
    supabase.from('exchange_requests').select('*'),
    supabase.from('projects').select('*'),
-   supabase.from('weekly_plan').select('*')
+   supabase.from('weekly_plan').select('*'),
+   supabase.from('daily_homework').select('*')
  ])
  const cloudCheckins = cr.status === 'fulfilled' && !cr.value.error ? cr.value.data : null
  if (cr.status === 'rejected' || (cr.value && cr.value.error)) pullErrors.push({ table: 'checkins', error: cr.status === 'rejected' ? cr.reason.message : cr.value.error.message })
@@ -172,6 +189,8 @@ export async function pull() {
  if (pr.status === 'rejected' || (pr.value && pr.value.error)) pullErrors.push({ table: 'projects', error: pr.status === 'rejected' ? pr.reason.message : pr.value.error.message })
  const cloudWeeklyPlans = wr.status === 'fulfilled' && !wr.value.error ? wr.value.data : null
  if (wr.status === 'rejected' || (wr.value && wr.value.error)) pullErrors.push({ table: 'weekly_plan', error: wr.status === 'rejected' ? wr.reason.message : wr.value.error.message })
+ const cloudHomework = dhr.status === 'fulfilled' && !dhr.value.error ? dhr.value.data : null
+ if (dhr.status === 'rejected' || (dhr.value && dhr.value.error)) pullErrors.push({ table: 'daily_homework', error: dhr.status === 'rejected' ? dhr.reason.message : dhr.value.error.message })
  if (pullErrors.length) state.lastError = pullErrors.map((x) => `${x.table}: ${x.error}`).join(' | ')
 
  const localCheckins = await getAllCheckins()
@@ -272,8 +291,36 @@ export async function pull() {
  // ---- weekly_plan 合并 ----
  // weekly_plan 是家长配置，云端优先，无需 LWW 比较
  for (const w of (cloudWeeklyPlans || [])) {
- await setWeeklyPlan(w.weekday, w.project_ids)
- pulled++
+   await setWeeklyPlan(w.weekday, w.project_ids)
+   pulled++
+ }
+
+ // ---- daily_homework 合并 (v4) ----
+ // daily_homework 按 date 去重，同一天保留 createdAt 较新的
+ if (cloudHomework && cloudHomework.length) {
+   const localHomework = await getDailyHomeworkAll()
+   const localHwMap = new Map(localHomework.map((h) => [h.date, h]))
+   for (const h of cloudHomework) {
+     const row = {
+       id: h.id,
+       date: h.date,
+       tasks: h.tasks,
+       source: h.source,
+       createdAt: h.created_at ? new Date(h.created_at).getTime() : 0
+     }
+     const existing = localHwMap.get(h.date)
+     if (!existing) {
+       await putDailyHomework(row)
+       pulled++
+     } else {
+       const eTs = existing.createdAt || existing.id || 0
+       const cTs = row.createdAt || row.id || 0
+       if (cTs > eTs) {
+         await putDailyHomework(row)
+         merged++
+       }
+     }
+   }
  }
 
  const ts = nowIso()

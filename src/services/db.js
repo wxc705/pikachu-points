@@ -315,3 +315,8 @@ export async function deleteDailyHomework(id) {
   const db = await openDB()
   await db.delete('daily_homework', id)
 }
+
+export async function putDailyHomework(homework) {
+  const db = await openDB()
+  return db.put('daily_homework', homework)
+}
