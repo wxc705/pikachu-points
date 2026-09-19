@@ -44,11 +44,25 @@
         :level-next-days="levelNextDays"
       />
 
-      <!-- 时段指示器（v4.1） -->
-      <div v-if="isIPad && currentTimelineSlot" class="tt-time-indicator">
-        <span class="tti-left">{{ currentTimelineSlot.icon }} {{ currentTimelineSlot.label }} ({{ currentTimelineSlot.time }})</span>
-        <span v-if="nextTimelineSlot" class="tti-right">下一个：{{ nextTimelineSlot.label }} 还有 {{ minutesUntilNext }} 分钟</span>
-        <span v-else class="tti-right tti-done">今天的任务都完成啦！</span>
+      <!-- 时间条（v4.1） -->
+      <div class="tt-time-bar" v-if="isIPad && currentTimelineSlot">
+        <div class="tt-tb-left">⏰ <span class="tt-tb-time">{{ String(Math.floor(nowMinutes / 60)).padStart(2, '0') }}:{{ String(nowMinutes % 60).padStart(2, '0') }}</span></div>
+        <div style="text-align:right">
+          <div class="tt-tb-right">当前：<span class="tt-tb-slot">{{ currentTimelineSlot.label }}</span></div>
+          <div v-if="nextTimelineSlot" class="tt-tb-next">下一个：{{ nextTimelineSlot.label }} · 还有 {{ minutesUntilNext }} 分钟</div>
+          <div v-else class="tt-tb-next tt-tb-done">今天的任务都完成啦！</div>
+        </div>
+      </div>
+
+      <!-- XP 等级进度条 -->
+      <div class="tt-xp-section" v-if="isIPad">
+        <div class="tt-xp-labels">
+          <span class="tt-xp-current">⚡ {{ levelLabel }}</span>
+          <span>{{ levelNextDays }}</span>
+        </div>
+        <div class="tt-xp-track">
+          <div class="tt-xp-fill" :style="{ width: levelProgress + '%' }"></div>
+        </div>
       </div>
 
       <!-- 说话气泡（v4） -->
@@ -71,8 +85,13 @@
           <!-- 左栏：学校作业 -->
           <div class="tt-column">
             <div class="tt-col-head">
-              <h2 class="tt-title">📚 学校作业</h2>
-              <span class="tt-earned" v-if="store.todayHomework.length">今日已得 +{{ store.todayHomeworkEarned }}分</span>
+              <div class="tt-col-head-left">
+                <div class="tt-col-icon is-school">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+                </div>
+                <h2>学校任务</h2>
+              </div>
+              <span class="tt-col-badge is-xp" v-if="store.todayHomework.length">+{{ store.todayHomework.length }} 进度</span>
             </div>
             <div v-if="!store.todayHomework.length" class="tt-col-empty">
               <span class="tt-col-empty-emoji">📝</span>
@@ -86,21 +105,18 @@
                 :style="entryStyle(i)"
               >
                 <div class="tt-task" :class="{ 'is-done': task.done }" @click="tapHomework(task)">
+                  <div class="tt-task-emoji">{{ emojiForName(task.name) }}</div>
                   <div class="tt-task-info">
-                    <span class="tt-task-emoji">{{ emojiForName(task.name) }}</span>
-                    <span class="tt-task-name">{{ task.name }}</span>
+                    <div class="tt-task-name">{{ task.name }}</div>
+                    <div class="tt-task-meta"><span class="xp-tag">+{{ task.points }} 变身进度</span></div>
                   </div>
-                  <div class="tt-task-right">
-                    <span class="tt-task-points">+{{ task.points }}</span>
-                    <button
-                      class="tt-btn"
-                      :class="{ 'is-done': task.done }"
-                      :disabled="task.done || busy.has(task.key)"
-                    >
-                      <span v-if="task.done">✓</span>
-                      <span v-else>打卡</span>
-                    </button>
-                  </div>
+                  <button class="tt-btn" :class="task.done ? 'is-done' : 'is-go'" :disabled="task.done || busy.has(task.key)">
+                    <span class="tt-btn-icon">
+                      <svg v-if="task.done" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
+                      <svg v-else viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                    </span>
+                    <span class="tt-btn-label">{{ task.done ? '已完成' : '闯关' }}</span>
+                  </button>
                 </div>
               </div>
             </div>
@@ -110,13 +126,23 @@
               </div>
               <span class="tt-progress-text">{{ homeworkDoneCount }}/{{ store.todayHomework.length }} 完成</span>
             </div>
+            <div class="tt-badges" v-if="store.todayHomework.length">
+              <div v-for="t in store.todayHomework" :key="t.key" class="tt-badge" :class="{ 'is-locked': !t.done }">
+                {{ emojiForName(t.name) }}
+              </div>
+            </div>
           </div>
 
           <!-- 右栏：自我拓展 -->
           <div class="tt-column">
             <div class="tt-col-head">
-              <h2 class="tt-title">🌟 自我拓展</h2>
-              <span class="tt-earned" v-if="store.todayTasks.length">今日已得 +{{ store.todayTaskEarned }}分</span>
+              <div class="tt-col-head-left">
+                <div class="tt-col-icon is-expand">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/></svg>
+                </div>
+                <h2>自我拓展</h2>
+              </div>
+              <span class="tt-col-badge is-pts" v-if="store.todayTasks.length">+{{ store.todayTasks.reduce((s, t) => s + t.points, 0) }} 积分</span>
             </div>
             <div v-if="!store.todayTasks.length" class="tt-col-empty">
               <span class="tt-col-empty-emoji">🌟</span>
@@ -130,25 +156,21 @@
                 :style="entryStyle(i)"
               >
                 <div class="tt-task" :class="cardClass(task)" @click="tapTask(task)">
-                  <div class="tt-task-slot">
-                    <span class="tt-slot-icon">{{ slotIcon(task.timeSlot) }}</span>
-                    <span class="tt-slot-text">{{ slotLabel(task.timeSlot) }}</span>
-                  </div>
+                  <div class="tt-task-emoji">{{ emojiForTask(task) }}</div>
                   <div class="tt-task-info">
-                    <span class="tt-task-emoji">{{ emojiForTask(task) }}</span>
-                    <span class="tt-task-name">{{ task.name }}</span>
+                    <div class="tt-task-name">{{ task.name }}</div>
+                    <div class="tt-task-meta">
+                      <span class="pt-tag">+{{ task.points }} 积分</span>
+                      <template v-if="task.timeSlot"> · <span class="xp-tag">{{ slotLabel(task.timeSlot) }}</span></template>
+                    </div>
                   </div>
-                  <div class="tt-task-right">
-                    <span class="tt-task-points">+{{ task.points }}</span>
-                    <button
-                      class="tt-btn"
-                      :class="{ 'is-done': isDone(task) }"
-                      :disabled="isDone(task) || busy.has(task.id)"
-                    >
-                      <span v-if="isDone(task)">✓</span>
-                      <span v-else>打卡</span>
-                    </button>
-                  </div>
+                  <button class="tt-btn" :class="isDone(task) ? 'is-done' : 'is-go'" :disabled="isDone(task) || busy.has(task.id)">
+                    <span class="tt-btn-icon">
+                      <svg v-if="isDone(task)" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/></svg>
+                      <svg v-else viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                    </span>
+                    <span class="tt-btn-label">{{ isDone(task) ? '已完成' : '闯关' }}</span>
+                  </button>
                   <Transition name="tt-float">
                     <span
                       v-if="floating && floating.taskId === task.id"
@@ -164,6 +186,11 @@
                 <div class="tt-progress-fill" :style="{ width: expansionProgressPct + '%' }"></div>
               </div>
               <span class="tt-progress-text">{{ expansionDoneCount }}/{{ store.todayTasks.length }} 完成</span>
+            </div>
+            <div class="tt-badges" v-if="store.todayTasks.length">
+              <div v-for="t in store.todayTasks" :key="t.id" class="tt-badge" :class="{ 'is-locked': !isDone(t) }">
+                {{ emojiForTask(t) }}
+              </div>
             </div>
           </div>
         </div>
@@ -776,6 +803,26 @@ onBeforeUnmount(() => {
 .sb-spacer { flex:1 }
 .sb-parent { color:rgba(255,255,255,.3);font-size:14px;justify-content:center }
 .tt-main-area { flex:1;display:flex;flex-direction:column;min-width:0;overflow-y:auto;padding:20px 24px;gap:16px }
+/* ============================================================
+   v4.1: 时间条
+   ============================================================ */
+.tt-time-bar { display:flex;justify-content:space-between;align-items:center;padding:12px 20px;background:rgba(255,255,255,.85);border-radius:16px;border:2px solid #e0e7ff;box-shadow:0 2px 8px rgba(79,70,229,.05);backdrop-filter:blur(8px) }
+.tt-tb-left { display:flex;align-items:center;gap:10px;font-size:15px;font-weight:700;color:#1a1a2e }
+.tt-tb-time { color:#4f46e5;font-size:18px;font-variant-numeric:tabular-nums }
+.tt-tb-right { text-align:right;font-size:14px;color:#64748b }
+.tt-tb-slot { color:#4f46e5;font-weight:800 }
+.tt-tb-next { font-size:12px;color:#94a3b8;margin-top:2px }
+
+/* ============================================================
+   v4.1: XP 等级进度条
+   ============================================================ */
+.tt-xp-section { background:rgba(255,255,255,.85);border-radius:16px;padding:14px 20px;border:2px solid #e0e7ff;display:flex;flex-direction:column;gap:8px;backdrop-filter:blur(8px) }
+.tt-xp-labels { display:flex;justify-content:space-between;font-size:13px;font-weight:700;color:#64748b }
+.tt-xp-current { color:#4f46e5 }
+.tt-xp-track { height:16px;background:#eef2ff;border-radius:99px;overflow:hidden }
+.tt-xp-fill { height:100%;border-radius:99px;background:linear-gradient(90deg,#818cf8,#6366f1,#4f46e5);position:relative;transition:width .6s }
+.tt-xp-fill::after { content:'';position:absolute;top:2px;left:8px;right:8px;height:4px;background:rgba(255,255,255,.3);border-radius:99px }
+
 .tt-time-indicator { display:flex;justify-content:space-between;align-items:center;padding:12px 20px;background:rgba(255,255,255,.85);border-radius:16px;border:2px solid #e0e7ff;box-shadow:0 2px 8px rgba(79,70,229,.05);backdrop-filter:blur(8px) }
 .tti-left { display:flex;align-items:center;gap:8px;font-size:15px;font-weight:700;color:#1a1a2e }
 .tti-right { font-size:14px;color:#64748b }

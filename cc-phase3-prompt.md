@@ -1,170 +1,140 @@
-# Phase 3 — 今日时间线 + 最终验证
+# Phase 3 — 全面对齐 V2 设计稿 + 功能补齐
 
 ## 项目信息
 - 绝对路径: `C:\Users\Windows\projects\pikachu-points`
-- 技术栈: Vue 3 + Vite + Pinia
+- 技术栈: Vue 3 + Vite + Pinia + IndexedDB (idb)
+- 设计稿: `C:\Users\Windows\Desktop\v2-final-v4.html`（先读这个文件作为 CSS/布局基准）
 
-## 任务概述
-在 `src/kid/TodayTasks.vue` 的"设置"tab（最后一个 `v-else` section）中，添加今日时间线展示。同时验证全部功能。
+## 核心目标
+当前 `src/kid/TodayTasks.vue`（917行）功能代码基本完整，但 CSS 严重落后于设计稿。**需要做两件事**：
+1. **重写 scoped CSS**：基于设计稿 HTML 的 CSS，替换当前 TodayTasks.vue 的 `<style scoped>` 部分
+2. **补齐缺失的模板元素**：XP 进度条、时间条、徽章、按钮 SVG 图标
 
 ---
 
-## 文件: `C:\Users\Windows\projects\pikachu-points\src\kid\TodayTasks.vue`
+## 第一步：读设计稿
+先读 `C:\Users\Windows\Desktop\v2-final-v4.html`，提取所有 CSS 规则。设计稿的关键样式：
 
-### 改动 1: 在"我的基地"section 的成就墙之后、设置入口之前，插入今日时间线
+### 侧栏
+- `sidebar`: `flex:0 0 100px; background:linear-gradient(180deg,#4f46e5,#7c3aed)`
+- `sb-item`: `padding:12px 12px; border-radius:14px; color:rgba(255,255,255,.5); font-size:16px; font-weight:700`
+- `sb-item.active`: `color:#fff; background:rgba(255,255,255,.15)`
 
-找到这段代码（在 `</div><!-- tt-achieve -->` 之后、`<!-- 设置入口 -->` 之前）：
+### 英雄区
+- `hero-chip`: `background:rgba(255,255,255,.85); border:2px solid #e0e7ff; backdrop-filter:blur(8px); border-radius:20px`
+- `hero-chip.points`: `background:linear-gradient(135deg,rgba(251,191,36,.9),rgba(245,158,11,.9))`
+
+### 时间条
+- `time-bar`: `background:rgba(255,255,255,.85); border-radius:16px; border:2px solid #e0e7ff`
+
+### XP进度条
+- `xp-section`: `background:rgba(255,255,255,.85); border-radius:16px; border:2px solid #e0e7ff`
+- `xp-track`: `height:16px; background:#eef2ff; border-radius:99px`
+- `xp-fill`: `background:linear-gradient(90deg,#818cf8,#6366f1,#4f46e5); position:relative; transition:width .6s`
+- `xp-fill::after`: 顶部白色高光条
+
+### 双栏
+- `dual`: `display:flex; gap:20px; flex:1`
+- `section-card`: `background:rgba(255,255,255,.85); border-radius:20px; border:2px solid #e0e7ff; backdrop-filter:blur(8px)`
+
+### 任务卡片
+- `task`: `background:rgba(250,251,255,.8); border:2px solid #eef2ff; backdrop-filter:blur(4px)`
+- `task:hover`: `border-color:#c7d2fe; transform:translateY(-2px); box-shadow:0 4px 12px rgba(79,70,229,.08)`
+- `task.done`: `opacity:.5; border-color:#d1fae5; background:rgba(240,253,244,.8)`
+
+### 按钮（关键！半透明软糖风格）
+- `btn`: 无固定背景，用 `::before` 内光 + `::after` 底部暗光
+- `btn::before`: `background:linear-gradient(180deg,rgba(255,255,255,.28),transparent); height:50%`
+- `btn::after`: `background:linear-gradient(0deg,rgba(0,0,0,.08),transparent); height:30%`
+- `btn:active`: `transform:scale(.92) translateY(2px)`
+- `btn-go`: `background:linear-gradient(180deg,rgba(129,140,248,.85),rgba(99,102,241,.9),rgba(79,70,229,.95)); box-shadow:0 8px 28px rgba(99,102,241,.3); backdrop-filter:blur(8px)`
+- `btn-done`: `background:linear-gradient(180deg,rgba(52,211,153,.85),rgba(16,185,129,.9),rgba(5,150,105,.95)); backdrop-filter:blur(8px)`
+
+### 进度条
+- `progress-bar`: `height:12px; background:#eef2ff; border-radius:99px`
+- `progress-fill.xp`: `background:linear-gradient(90deg,#818cf8,#6366f1)`
+- `progress-fill.pt`: `background:linear-gradient(90deg,#fbbf24,#f59e0b)`
+
+### 徽章
+- `badge`: `width:34px; height:34px; border-radius:10px; font-size:16px; background:rgba(241,245,249,.8); border:2px solid #e2e8f0`
+- `badge.locked`: `opacity:.2; filter:grayscale(1)`
+
+### 时间线（设置tab）
+- `settings-card`: `background:rgba(255,255,255,.85); border-radius:16px; border:2px solid #e0e7ff; backdrop-filter:blur(8px)`
+- `tl-row`: `padding:8px 0; border-bottom:1px solid rgba(241,245,249,.8)`
+- `tl-active`: `color:#059669; font-weight:800`
+
+### 底部tab
+- `tab`: `flex:1; flex-direction:column; align-items:center; padding:8px 4px; color:#94a3b8; font-size:12px; font-weight:600`
+- `tab.is-active`: `color:#4f46e5`
+
+---
+
+## 第二步：修改 TodayTasks.vue
+
+### 2a. 在 XP 进度条区域（英雄区下方，双栏上方）插入模板
+在 HeroSection 和双栏之间，加上 XP 进度条和时间条：
 
 ```html
-        </div>
+<!-- XP 等级进度条 -->
+<div class="xp-section" v-if="isIPad">
+  <div class="xp-labels">
+    <span class="current">⚡ {{ levelLabel }}</span>
+    <span>{{ streak }} / {{ nextLevelDays }} 天 → {{ nextLevelLabel }}</span>
+  </div>
+  <div class="xp-track">
+    <div class="xp-fill" :style="{ width: levelProgress + '%' }"></div>
+  </div>
+</div>
 
-        <!-- 设置入口 -->
+<!-- 时间条 -->
+<div class="time-bar" v-if="isIPad && currentTimelineSlot">
+  <div class="tb-left">⏰ <span class="time">{{ currentTimeStr }}</span></div>
+  <div style="text-align:right">
+    <div class="tb-right">当前：<span class="slot">{{ currentTimelineSlot.label }}</span></div>
+    <div v-if="nextTimelineSlot" class="tb-next">下一个：{{ nextTimelineSlot.label }} · 还有 {{ minutesUntilNext }} 分钟</div>
+  </div>
+</div>
 ```
 
-替换为：
-
+### 2b. 在每列底部加徽章
+学校作业列底部：
 ```html
-        </div>
-
-        <!-- 今日时间线 -->
-        <div class="tt-timeline">
-          <h3 class="tt-title" style="font-size:24px;">📅 今日安排</h3>
-          <div class="tt-tl-list">
-            <div
-              v-for="(slot, i) in timelineSlots"
-              :key="i"
-              class="tt-tl-slot"
-              :class="{ 'is-current': slot.state === 'current', 'is-past': slot.state === 'past' }"
-            >
-              <div class="tt-tl-time">
-                <span class="tt-tl-icon">{{ slot.icon }}</span>
-                <span class="tt-tl-hour">{{ slot.time }}</span>
-              </div>
-              <div class="tt-tl-line"></div>
-              <div class="tt-tl-content">{{ slot.label }}</div>
-            </div>
-          </div>
-        </div>
-
-        <!-- 设置入口 -->
+<div class="badges" v-if="store.todayHomework.length">
+  <div v-for="t in store.todayHomework" :key="t.key" class="badge" :class="{ locked: !t.done }">
+    {{ emojiForName(t.name) }}
+  </div>
+</div>
 ```
 
-### 改动 2: 在 script 中添加 timelineSlots computed
-
-在 `selectedAchievement` ref 之后添加：
-
-```js
-// v4: 今日时间线
-const DEFAULT_TIMELINE = [
-  { time: '早晨', icon: '🌅', label: '起床 + 洗漱 + 早餐', startMin: 0 },
-  { time: '8:20', icon: '🏫', label: '上学', startMin: 500 },
-  { time: '15:20', icon: '🏠', label: '放学', startMin: 920 },
-  { time: '16:00', icon: '📚', label: '完成作业', startMin: 960 },
-  { time: '17:00', icon: '🏃', label: '运动时间', startMin: 1020 },
-  { time: '18:00', icon: '🎮', label: '自由活动', startMin: 1080 },
-  { time: '20:00', icon: '🛁', label: '洗澡 + 睡前阅读', startMin: 1200 },
-  { time: '21:00', icon: '🌙', label: '睡觉', startMin: 1260 }
-]
-
-const timelineSlots = computed(() => {
-  const now = nowMinutes.value
-  return DEFAULT_TIMELINE.map((slot, i) => {
-    const nextStart = i < DEFAULT_TIMELINE.length - 1 ? DEFAULT_TIMELINE[i + 1].startMin : 9999
-    let state = 'future'
-    if (now >= nextStart) state = 'past'
-    else if (now >= slot.startMin) state = 'current'
-    return { ...slot, state }
-  })
-})
+自我拓展列底部：
+```html
+<div class="badges" v-if="store.todayTasks.length">
+  <div v-for="t in store.todayTasks" :key="t.id" class="badge" :class="{ locked: !isDone(t) }">
+    {{ emojiForTask(t) }}
+  </div>
+</div>
 ```
 
-### 改动 3: 在 `<style scoped>` 末尾添加时间线 CSS
+### 2c. 按钮内加 SVG 图标
+把任务卡片的打卡按钮从 emoji 改为 SVG 图标（参考设计稿的 btn-icon + btn-label 结构）：
+- 未完成: 闪电图标 `<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>`
+- 已完成: 盾牌勾图标 `<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/>`
 
-```css
-/* ============================================================
-   v4: 今日时间线
-   ============================================================ */
-.tt-timeline {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  margin-top: 8px;
-}
-.tt-tl-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-}
-.tt-tl-slot {
-  display: flex;
-  align-items: stretch;
-  gap: 12px;
-  min-height: 48px;
-}
-.tt-tl-time {
-  flex: 0 0 70px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 0;
-}
-.tt-tl-icon {
-  font-size: 20px;
-  line-height: 1;
-}
-.tt-tl-hour {
-  font-size: 15px;
-  font-weight: 700;
-  color: #666;
-  white-space: nowrap;
-}
-.tt-tl-line {
-  flex: 0 0 3px;
-  background: #e5e7eb;
-  border-radius: 2px;
-  margin: 4px 0;
-}
-.tt-tl-content {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  padding: 8px 14px;
-  font-size: 17px;
-  font-weight: 600;
-  color: #444;
-  border-radius: 12px;
-  transition: background 0.3s;
-}
-.tt-tl-slot.is-current .tt-tl-line {
-  background: linear-gradient(180deg, #ffb627, #ff8a00);
-  box-shadow: 0 0 8px rgba(255, 183, 39, 0.4);
-}
-.tt-tl-slot.is-current .tt-tl-content {
-  background: linear-gradient(135deg, rgba(255, 214, 102, 0.3), rgba(255, 236, 179, 0.3));
-  border-left: 3px solid #ffb627;
-  font-weight: 800;
-  color: #222;
-}
-.tt-tl-slot.is-past .tt-tl-hour {
-  color: #bbb;
-}
-.tt-tl-slot.is-past .tt-tl-content {
-  color: #bbb;
-}
-```
+### 2d. 重写 `<style scoped>`
+用设计稿的 CSS 替换当前所有 scoped CSS。确保每个 class 名与模板匹配。
 
 ---
 
 ## 禁止清单
 - **不要**修改 `db.js` / `points.js` / `router.js` / `App.vue` / `main.js`
-- **不要**修改任何其他 `.vue` 文件
+- **不要**修改 `KidHome.vue` / `ParentDashboard.vue`
+- **不要**修改 `voice.js` / `SpeechBubble.vue` / `AllDoneEffect.vue` / `HeroSection.vue`
 - **不要**新建任何文件
 - **不要**引入任何 npm 新依赖
+- **不要**改动 JavaScript 逻辑（只改 template + style）
+- **不要**改动 `v2-style.css` 或 `kid-style.css`（只改 TodayTasks.vue 的 scoped style）
 
 ## 验证清单
 1. `cd C:\Users\Windows\projects\pikachu-points && npm run build` — 构建成功
-2. `grep -c "今日安排" dist/assets/index-*.js` — 结果 > 0
-3. `grep -c "tt-timeline" dist/assets/index-*.js` — 结果 > 0
-4. `grep -c "timelineSlots" dist/assets/index-*.js` — 结果 > 0（可能被 minify，0 也可接受）
-5. 最终检查: `ls -la src/services/voice.js src/components/*.vue` — 全部存在
-6. 最终检查: `grep -c "speakEncouragement\|speakAllDone\|warmUpVoice\|太棒了\|全勤达成\|积分商城\|我的成就\|今日安排" dist/assets/index-*.js` — 每个 > 0
+2. 截图对比设计稿，确认：紫色侧栏、玻璃卡片、XP进度条、时间条、半透明按钮、底部tab
