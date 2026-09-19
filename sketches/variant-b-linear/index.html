@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Variant B — Linear 深色科技风</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;background:#0f0f1a;color:#e0e0e0;display:flex;min-height:100vh}
+.sidebar{flex:0 0 90px;background:#0a0a14;display:flex;flex-direction:column;align-items:center;padding:16px 0;gap:4px;border-right:1px solid rgba(168,85,247,.15)}
+.sb-avatar{display:flex;flex-direction:column;align-items:center;padding:8px 0 16px;border-bottom:1px solid rgba(168,85,247,.15);width:100%;margin-bottom:8px}
+.sb-avatar span:first-child{font-size:36px;filter:drop-shadow(0 0 8px rgba(168,85,247,.5))}
+.sb-avatar span:last-child{font-size:11px;font-weight:700;color:rgba(168,85,247,.7);margin-top:4px;letter-spacing:.5px}
+.sb-item{display:flex;flex-direction:column;align-items:center;width:100%;padding:10px 8px;border:none;background:transparent;color:rgba(255,255,255,.35);font-size:13px;font-weight:600;cursor:pointer;border-left:3px solid transparent;font-family:inherit;transition:all .15s;letter-spacing:.3px}
+.sb-item:hover{color:rgba(255,255,255,.6);background:rgba(168,85,247,.05)}
+.sb-item.active{color:#a855f7;font-weight:800;border-left-color:#a855f7;background:rgba(168,85,247,.08)}
+.sb-spacer{flex:1}
+.main{flex:1;padding:20px;overflow-y:auto;display:flex;flex-direction:column;gap:20px}
+.hero{display:flex;gap:14px}
+.hero-chip{flex:1;display:flex;align-items:center;gap:12px;padding:14px 18px;border-radius:16px;background:#1a1a2e;border:1px solid rgba(168,85,247,.2);box-shadow:0 0 20px rgba(168,85,247,.08)}
+.hero-chip.points{background:linear-gradient(135deg,rgba(168,85,247,.2),rgba(59,130,246,.2));border-color:rgba(168,85,247,.4)}
+.hero-chip.points .hl,.hero-chip.points .hn{color:#e0e0e0}
+.hc-icon{font-size:30px;filter:drop-shadow(0 0 6px rgba(168,85,247,.4))}
+.hc-col{display:flex;flex-direction:column;gap:2px}
+.hl{font-size:14px;font-weight:600;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:1px}
+.hs{font-size:22px;font-weight:800;color:#e0e0e0}
+.hn{font-size:26px;font-weight:900;color:#a855f7;font-variant-numeric:tabular-nums}
+.ht{font-size:13px;font-weight:700;color:#4ade80;background:rgba(74,222,128,.1);padding:3px 10px;border-radius:99px;margin-top:4px}
+.dual{display:flex;gap:20px}
+.column{flex:1;display:flex;flex-direction:column;gap:12px}
+.col-head{display:flex;align-items:center;justify-content:space-between}
+.col-head h2{font-size:20px;font-weight:800;color:#e0e0e0}
+.col-earned{font-size:14px;font-weight:700;color:#4ade80;padding:4px 12px;border-radius:99px;background:rgba(74,222,128,.1);border:1px solid rgba(74,222,128,.2)}
+.section-card{background:#1a1a2e;border-radius:16px;padding:16px;border:1px solid rgba(255,255,255,.06);display:flex;flex-direction:column;gap:10px}
+.task{display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:12px;background:#12121e;border:1px solid rgba(255,255,255,.04);transition:all .15s}
+.task:hover{border-color:rgba(168,85,247,.2);background:#16162a}
+.task.done{opacity:.5;border-color:rgba(74,222,128,.15);background:#0a1a12}
+.task-emoji{font-size:28px;width:44px;height:44px;display:flex;align-items:center;justify-content:center;border-radius:12px;background:rgba(168,85,247,.08);flex-shrink:0}
+.task-info{flex:1;min-width:0}
+.task-name{font-size:16px;font-weight:700;color:#e0e0e0}
+.task-pts{font-size:13px;font-weight:600;color:rgba(255,255,255,.35);font-variant-numeric:tabular-nums}
+.task-btn{padding:8px 18px;border-radius:10px;border:1px solid;font-size:14px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .12s}
+.task-btn.go{background:rgba(168,85,247,.1);color:#a855f7;border-color:rgba(168,85,247,.3)}
+.task-btn.go:hover{background:rgba(168,85,247,.2)}
+.task-btn.done-btn{background:rgba(74,222,128,.08);color:#4ade80;border-color:rgba(74,222,128,.2)}
+.progress{display:flex;align-items:center;gap:10px;padding:4px 0}
+.progress-bar{flex:1;height:8px;background:#1a1a2e;border-radius:99px;overflow:hidden;border:1px solid rgba(255,255,255,.04)}
+.progress-fill{height:100%;border-radius:99px;background:linear-gradient(90deg,#a855f7,#3b82f6);box-shadow:0 0 8px rgba(168,85,247,.4);transition:width .4s ease}
+.progress-text{font-size:13px;font-weight:700;color:rgba(255,255,255,.35);font-variant-numeric:tabular-nums}
+@media(max-width:768px){.sidebar{display:none}.dual{flex-direction:column}.hero{flex-direction:column}}
+</style>
+</head>
+<body>
+<nav class="sidebar">
+  <div class="sb-avatar"><span>⚡</span><span>Lv.3</span></div>
+  <button class="sb-item active">📋 冒险</button>
+  <button class="sb-item">🏆 基地</button>
+  <button class="sb-item">🛒 商城</button>
+  <button class="sb-item">⚙️ 设置</button>
+  <div class="sb-spacer"></div>
+  <button class="sb-item" style="font-size:18px">👨‍👩‍👧</button>
+</nav>
+<div class="main">
+  <div class="hero">
+    <div class="hero-chip"><span class="hc-icon">📅</span><div class="hc-col"><span class="hs">周五 9.19</span><span class="hl">DATE</span></div></div>
+    <div class="hero-chip points"><span class="hc-icon">⭐</span><div class="hc-col"><span class="hl">POINTS</span><span class="hn">1,280</span><span class="ht">+14 today</span></div></div>
+    <div class="hero-chip"><span class="hc-icon">🔥</span><div class="hc-col"><span class="hl">STREAK</span><span class="hn">5 days</span><span style="font-size:12px;font-weight:700;color:rgba(168,85,247,.7)">ULTRAMAN Lv.3</span></div></div>
+  </div>
+  <div class="dual">
+    <div class="column">
+      <div class="col-head"><h2>📚 学校作业</h2><span class="col-earned">+8 pts</span></div>
+      <div class="section-card">
+        <div class="task done"><div class="task-emoji">📖</div><div class="task-info"><div class="task-name">语文预习第三课</div><div class="task-pts">+2 pts</div></div><button class="task-btn done-btn">✓ DONE</button></div>
+        <div class="task"><div class="task-emoji">🔢</div><div class="task-info"><div class="task-name">数学口算20道</div><div class="task-pts">+2 pts</div></div><button class="task-btn go">GO</button></div>
+        <div class="task done"><div class="task-emoji">🔤</div><div class="task-info"><div class="task-name">英语跟读 Unit 2</div><div class="task-pts">+2 pts</div></div><button class="task-btn done-btn">✓ DONE</button></div>
+        <div class="task"><div class="task-emoji">✏️</div><div class="task-info"><div class="task-name">练字15分钟</div><div class="task-pts">+2 pts</div></div><button class="task-btn go">GO</button></div>
+      </div>
+      <div class="progress"><div class="progress-bar"><div class="progress-fill" style="width:50%"></div></div><span class="progress-text">2 / 4</span></div>
+    </div>
+    <div class="column">
+      <div class="col-head"><h2>🌟 自我拓展</h2><span class="col-earned">+6 pts</span></div>
+      <div class="section-card">
+        <div class="task done"><div class="task-emoji">♟️</div><div class="task-info"><div class="task-name">国象15分钟</div><div class="task-pts">+2 pts</div></div><button class="task-btn done-btn">✓ DONE</button></div>
+        <div class="task"><div class="task-emoji">🧠</div><div class="task-info"><div class="task-name">思维训练</div><div class="task-pts">+2 pts</div></div><button class="task-btn go">GO</button></div>
+        <div class="task done"><div class="task-emoji">📚</div><div class="task-info"><div class="task-name">阅读15分钟</div><div class="task-pts">+2 pts</div></div><button class="task-btn done-btn">✓ DONE</button></div>
+      </div>
+      <div class="progress"><div class="progress-bar"><div class="progress-fill" style="width:66%"></div></div><span class="progress-text">2 / 3</span></div>
+    </div>
+  </div>
+</div>
+</body>
+</html>
