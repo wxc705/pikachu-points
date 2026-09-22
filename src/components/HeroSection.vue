@@ -23,8 +23,8 @@
         <span class="hero-level" v-if="levelLabel">{{ levelLabel }}</span>
       </div>
     </div>
-    <!-- 等级进度条 -->
-    <div class="hero-progress" v-if="levelProgress > 0">
+    <!-- 升级进度条（每周：连续天数 → 下一等级，常显） -->
+    <div class="hero-progress">
       <div class="hero-progress-bar">
         <div class="hero-progress-fill" :style="{ width: levelProgress + '%' }"></div>
       </div>

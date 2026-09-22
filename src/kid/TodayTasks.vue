@@ -54,14 +54,15 @@
         </div>
       </div>
 
-      <!-- XP 等级进度条（设计稿：始终显示） -->
+      <!-- 顶部进度条 = 每日进度（当天完成度，隔天清零） -->
       <div class="tt-xp-section">
         <div class="tt-xp-labels">
-          <span class="tt-xp-current">⚡ {{ levelLabel }}</span>
-          <span>{{ levelNextDays }}</span>
+          <span class="tt-xp-current">🌞 今日进度</span>
+          <span v-if="dailyTotal">{{ dailyDone }} / {{ dailyTotal }} 完成</span>
+          <span v-else>今天没有任务</span>
         </div>
         <div class="tt-xp-track" @click="debugTriggerMorph" style="cursor:pointer" title="点击触发变身（调试入口）">
-          <div class="tt-xp-fill" :style="{ width: levelProgress + '%' }"></div>
+          <div class="tt-xp-fill" :style="{ width: dailyProgress + '%' }"></div>
         </div>
       </div>
 
@@ -645,22 +646,27 @@ watch(ultramanLevel, (newLv, oldLv) => {
   if (newLv > oldLv) triggerMorph()
 })
 const LEVEL_THRESHOLDS = [0, 1, 3, 7, 14, 30] // 索引 0-5
+// 升级进度 = 每周（连续打卡天数，v4升级逻辑：中断回退到上一天等级，1/3/7/14/30天）
 const levelProgress = computed(() => {
   const s = streak.value
   const lv = ultramanLevel.value
   if (lv >= 5) return 100
   const current = LEVEL_THRESHOLDS[lv] || 0
   const next = LEVEL_THRESHOLDS[lv + 1] || 30
-  // 当天份额：今日完成度计入等级进度 —— 打卡立刻让进度条动起来。
-  // 纯按天数算时第一天是 (1-1)/2=0%，孩子点了任务条纹丝不动，反馈感为零。
-  const total = store.todayHomework.length + store.todayTasks.length
-  const done =
+  // clamp：streak 可能低于当前等级阈值（如 lv=1 但 s=0），避免负数进度
+  return Math.max(0, Math.min(100, Math.round(((s - current) / (next - current)) * 100)))
+})
+
+// 顶部进度条 = 每日：今日（作业+拓展）完成度，当天归零重新累计
+const dailyTotal = computed(() => store.todayHomework.length + store.todayTasks.length)
+const dailyDone = computed(
+  () =>
     store.todayHomework.filter((t) => t.done).length +
     store.todayTasks.filter((t) => isDone(t)).length
-  const share = total > 0 ? done / total : 0
-  // clamp：streak 可能低于当前等级阈值（如 lv=1 但 s=0），避免负数进度
-  return Math.max(0, Math.min(100, Math.round(((s - current + share) / (next - current)) * 100)))
-})
+)
+const dailyProgress = computed(() =>
+  dailyTotal.value > 0 ? Math.round((dailyDone.value / dailyTotal.value) * 100) : 0
+)
 const levelNextDays = computed(() => {
   const s = streak.value
   const lv = ultramanLevel.value
