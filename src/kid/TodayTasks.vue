@@ -478,23 +478,70 @@ function triggerMorph() {
 }
 function closeMorph() { showMorph.value = false }
 
-// v4: 今日时间线
-const DEFAULT_TIMELINE = [
-  { time: '7:00', icon: '🌅', label: '起床 + 洗漱 + 早餐', startMin: 420 },
-  { time: '7:40', icon: '🎒', label: '出发上学', startMin: 460 },
-  { time: '16:10', icon: '🏫', label: '放学', startMin: 970 },
-  { time: '16:30', icon: '🏠', label: '到家 · 按课表闯关', startMin: 990 },
-  { time: '17:30', icon: '🍚', label: '吃饭 · 兴趣活动(按课表)', startMin: 1050 },
-  { time: '18:30', icon: '📝', label: '作业与提高', startMin: 1110 },
-  { time: '19:30', icon: '🎮', label: '自由安排(含阅读30分钟)', startMin: 1170 },
-  { time: '20:30', icon: '🪥', label: '洗漱准备睡觉', startMin: 1230 },
-  { time: '21:00', icon: '🌙', label: '睡觉', startMin: 1260 }
-]
+// v4: 今日时间线 — 固定时钟锚点 + 当天课表动态生成（每天不同，如周二18:00写字课）
+// 吃饭时间按 xlsx：周三体能课17:00-18:00，吃饭18:00；其余平日17:30
+const MEAL_TIME = { 1: '17:30', 2: '17:30', 3: '18:00', 4: '17:30', 5: '17:30' }
+
+function timelineMin(hhmm) {
+  const m = /^(\d{1,2}):(\d{2})/.exec(hhmm || '')
+  return m ? Number(m[1]) * 60 + Number(m[2]) : null
+}
 
 const timelineSlots = computed(() => {
   const now = nowMinutes.value
-  return DEFAULT_TIMELINE.map((slot, i) => {
-    const nextStart = i < DEFAULT_TIMELINE.length - 1 ? DEFAULT_TIMELINE[i + 1].startMin : 9999
+  const rawWd = new Date().getDay()
+  const wd = rawWd === 0 ? 7 : rawWd
+  const weekend = wd >= 6
+  const fmt = (min) => `${Math.floor(min / 60)}:${String(min % 60).padStart(2, '0')}`
+
+  // 当天闯关任务按时段起点分组: startMin -> { names, icon }
+  const slotMap = {}
+  for (const t of store.todayTasks) {
+    const s = timelineMin(t.timeSlot)
+    if (s == null) continue // '早晨' 等无具体时间的不进时间线
+    if (!slotMap[s]) slotMap[s] = { names: [], icon: emojiForTask(t) }
+    slotMap[s].names.push(t.name)
+  }
+
+  const entries = []
+  const push = (min, icon, label) => entries.push({ time: fmt(min), icon, label, startMin: min })
+
+  if (!weekend) {
+    push(420, '🌅', '起床 + 洗漱 + 早餐')
+    push(460, '🎒', '出发上学')
+    push(970, '🏫', '放学')
+  }
+
+  const mealMin = weekend ? null : timelineMin(MEAL_TIME[wd])
+  // 平日固定锚点(到家/作业与提高/自由安排)必须无条件出现，即使该时段当天没有积分项
+  const fixedKeys = weekend ? [] : [990, 1110, 1170]
+  const keys = new Set([
+    ...Object.keys(slotMap).map(Number),
+    ...(mealMin != null ? [mealMin] : []),
+    ...fixedKeys
+  ])
+
+  for (const s of [...keys].sort((a, b) => a - b)) {
+    const g = slotMap[s]
+    const names = g ? g.names.join(' · ') : ''
+    if (!weekend && s === 990) push(s, '🏠', names ? `到家 · ${names}` : '到家 · 按课表闯关')
+    else if (mealMin != null && s === mealMin && !g) push(s, '🍚', '吃饭')
+    else if (!weekend && s === 1110) push(s, '📝', names ? `作业与提高 · ${names}` : '作业与提高')
+    else if (!weekend && s === 1170) push(s, '🎮', names ? `自由安排(含阅读30分钟) · 今有 ${names}` : '自由安排(含阅读30分钟)')
+    else push(s, g ? g.icon : '⏰', names || fmt(s))
+  }
+
+  if (!weekend) {
+    if (!keys.has(1230)) push(1230, '🪥', '洗漱准备睡觉')
+    if (!keys.has(1260)) push(1260, '🌙', '睡觉')
+  } else if (!keys.has(1260)) {
+    push(1260, '🌙', '睡觉')
+  }
+
+  entries.sort((a, b) => a.startMin - b.startMin)
+
+  return entries.map((slot, i) => {
+    const nextStart = i < entries.length - 1 ? entries[i + 1].startMin : 9999
     let state = 'future'
     if (now >= nextStart) state = 'past'
     else if (now >= slot.startMin) state = 'current'
@@ -623,18 +670,20 @@ const ultramanEmoji = computed(() => {
   return ULTRAMAN_EMOJIS[Math.min(lv - 1, ULTRAMAN_EMOJIS.length - 1)] || '⚡'
 })
 
-// v4.1: 时段指示器
+// v4.1: 时段指示器（基于动态 timelineSlots，随当天课表变化）
 const currentTimelineSlot = computed(() => {
   const now = nowMinutes.value
-  for (let i = DEFAULT_TIMELINE.length - 1; i >= 0; i--) {
-    if (now >= DEFAULT_TIMELINE[i].startMin) return { ...DEFAULT_TIMELINE[i], index: i }
+  const list = timelineSlots.value
+  for (let i = list.length - 1; i >= 0; i--) {
+    if (now >= list[i].startMin) return { ...list[i], index: i }
   }
   return null
 })
 const nextTimelineSlot = computed(() => {
   const cur = currentTimelineSlot.value
-  if (!cur || cur.index >= DEFAULT_TIMELINE.length - 1) return null
-  return DEFAULT_TIMELINE[cur.index + 1]
+  const list = timelineSlots.value
+  if (!cur || cur.index >= list.length - 1) return null
+  return list[cur.index + 1]
 })
 const minutesUntilNext = computed(() => {
   const next = nextTimelineSlot.value
