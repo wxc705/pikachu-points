@@ -651,8 +651,15 @@ const levelProgress = computed(() => {
   if (lv >= 5) return 100
   const current = LEVEL_THRESHOLDS[lv] || 0
   const next = LEVEL_THRESHOLDS[lv + 1] || 30
+  // 当天份额：今日完成度计入等级进度 —— 打卡立刻让进度条动起来。
+  // 纯按天数算时第一天是 (1-1)/2=0%，孩子点了任务条纹丝不动，反馈感为零。
+  const total = store.todayHomework.length + store.todayTasks.length
+  const done =
+    store.todayHomework.filter((t) => t.done).length +
+    store.todayTasks.filter((t) => isDone(t)).length
+  const share = total > 0 ? done / total : 0
   // clamp：streak 可能低于当前等级阈值（如 lv=1 但 s=0），避免负数进度
-  return Math.max(0, Math.min(100, Math.round(((s - current) / (next - current)) * 100)))
+  return Math.max(0, Math.min(100, Math.round(((s - current + share) / (next - current)) * 100)))
 })
 const levelNextDays = computed(() => {
   const s = streak.value
