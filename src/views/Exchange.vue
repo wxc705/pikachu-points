@@ -6,6 +6,53 @@
       <p class="text-5xl font-extrabold tracking-tight mt-1">{{ store.totalPoints }}</p>
     </section>
 
+    <!-- 奖品库（家长录商城兑换奖品 → 儿童端商城展示，数据源 projects.category=兑换） -->
+    <section class="rounded-2xl bg-surface shadow-sm p-5 space-y-3">
+      <div class="flex items-center justify-between">
+        <h2 class="font-bold text-lg">🎁 奖品库</h2>
+        <span v-if="editingId" class="text-xs font-semibold text-secondary">✏️ 编辑中</span>
+      </div>
+      <p class="text-xs text-ink-soft -mt-2">家长在这里录入奖品，儿童端「商城」按分值展示</p>
+      <div class="flex gap-2">
+        <input
+          v-model="rwForm.name"
+          placeholder="奖品名（例如：贴纸）"
+          class="flex-1 min-w-0 bg-primary-soft/50 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:bg-surface transition-all"
+        />
+        <input
+          v-model.number="rwForm.points"
+          type="number"
+          min="1"
+          placeholder="几分"
+          class="w-24 bg-primary-soft/50 rounded-xl px-3 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:bg-surface transition-all"
+        />
+        <button
+          @click="saveReward"
+          :disabled="!rwForm.name.trim() || !(rwForm.points > 0)"
+          class="rounded-xl bg-secondary hover:opacity-90 disabled:opacity-40 text-white font-bold px-4 text-sm transition-all btn-press"
+        >{{ editingId ? '保存' : '添加' }}</button>
+        <button
+          v-if="editingId"
+          @click="cancelEdit"
+          class="rounded-xl bg-primary-soft/50 text-ink-soft font-medium px-3 text-sm transition-all"
+        >取消</button>
+      </div>
+      <p v-if="rwMsg" class="text-sm text-center font-medium">{{ rwMsg }}</p>
+      <ul v-if="rewards.length" class="divide-y divide-primary-soft/50">
+        <li v-for="r in rewards" :key="r.id" class="py-2.5 flex items-center justify-between gap-3">
+          <div class="flex-1 min-w-0">
+            <p class="font-semibold truncate">🎁 {{ r.name }}</p>
+            <p class="text-xs text-ink-soft mt-0.5">{{ r.points }} 分<span v-if="r.isActive === false"> · 已下架</span></p>
+          </div>
+          <div class="flex items-center gap-2 shrink-0">
+            <button @click="editReward(r)" title="编辑" class="w-9 h-9 rounded-full bg-primary-soft/60 hover:bg-primary-soft text-sm transition-colors btn-press">✏️</button>
+            <button @click="removeReward(r)" title="删除" class="w-9 h-9 rounded-full bg-red-50 hover:bg-red-100 text-sm transition-colors btn-press">🗑️</button>
+          </div>
+        </li>
+      </ul>
+      <p v-else class="text-sm text-ink-soft text-center py-2">还没有奖品，添加第一个吧 🎈</p>
+    </section>
+
     <!-- 申请表单 -->
     <section class="rounded-2xl bg-surface shadow-sm p-5 space-y-3.5">
       <h2 class="font-bold text-lg">🎁 申请兑换</h2>
@@ -111,6 +158,61 @@ function statusBadge(s) {
     rejected: 'px-2.5 py-0.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-500'
   }
   return map[s] || ''
+}
+
+// 🎁 奖品库（家长录入 → store.projects category=兑换 → 儿童端商城直出）
+const rwForm = reactive({ name: '', points: 10 })
+const editingId = ref(null)
+const rwMsg = ref('')
+const rewards = computed(() => store.projects.filter((p) => p.category === '兑换'))
+
+function rwToast(msg) {
+  rwMsg.value = msg
+  setTimeout(() => { rwMsg.value = '' }, 3000)
+}
+
+async function saveReward() {
+  const name = rwForm.name.trim()
+  if (!name || !(rwForm.points > 0)) return
+  try {
+    if (editingId.value) {
+      await store.updateProjectItem(editingId.value, { name, points: Number(rwForm.points) })
+      rwToast('✅ 已保存')
+    } else {
+      await store.addProjectItem({ category: '兑换', name, points: Number(rwForm.points) })
+      rwToast('✅ 已加入奖品库（儿童端商城刷新可见）')
+    }
+    rwForm.name = ''
+    rwForm.points = 10
+    editingId.value = null
+  } catch (e) {
+    console.warn('[exchange] save reward failed:', e)
+    rwToast('❌ 保存失败：' + (e && e.message ? e.message : '未知错误'))
+  }
+}
+
+function editReward(r) {
+  editingId.value = r.id
+  rwForm.name = r.name
+  rwForm.points = r.points || 1
+}
+
+function cancelEdit() {
+  editingId.value = null
+  rwForm.name = ''
+  rwForm.points = 10
+}
+
+async function removeReward(r) {
+  if (!window.confirm(`删除奖品「${r.name}」？儿童端商城将不再显示。`)) return
+  try {
+    await store.deleteProjectItem(r.id)
+    if (editingId.value === r.id) cancelEdit()
+    rwToast('🗑️ 已删除')
+  } catch (e) {
+    console.warn('[exchange] delete reward failed:', e)
+    rwToast('❌ 删除失败：' + (e && e.message ? e.message : '未知错误'))
+  }
 }
 
 async function submit() {
