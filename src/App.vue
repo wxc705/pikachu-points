@@ -43,7 +43,6 @@ import MilestoneEffect from './components/MilestoneEffect.vue'
 import {
   Zap,
   Home,
-  CheckCircle2,
   Gift,
   Clock,
   FileBarChart,
@@ -56,7 +55,6 @@ import {
 const store = usePointsStore()
 const links = [
   { to: '/', label: '首页', icon: Home },
-  { to: '/checkin', label: '打卡', icon: CheckCircle2 },
   { to: '/exchange', label: '兑换', icon: Gift },
   { to: '/history', label: '历史', icon: Clock },
   { to: '/report', label: '报告', icon: FileBarChart },

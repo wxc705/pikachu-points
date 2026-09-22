@@ -174,7 +174,6 @@ const pendingRequests = computed(() => store.requests.filter((r) => r.status ===
 const todayCheckins = computed(() => store.checkins.filter((c) => c.date === store.today))
 
 const quickActions = [
-  { to: '/checkin', label: '快速打卡', icon: CheckCircle2 },
   { to: '/rating', label: '学习评分', icon: Star },
   { to: '/exchange', label: '兑换管理', icon: Gift },
   { to: '/history', label: '历史记录', icon: Clock }

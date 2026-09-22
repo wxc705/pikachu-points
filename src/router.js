@@ -1,6 +1,5 @@
 import { createRouter, createWebHashHistory } from 'vue-router'
 import Home from './views/Home.vue'
-import Checkin from './views/Checkin.vue'
 import Exchange from './views/Exchange.vue'
 import History from './views/History.vue'
 import Rating from './views/Rating.vue'
@@ -24,7 +23,6 @@ const routes = [
   if (isIPad()) next('/kid/today')
   else next()
  } },
- { path: '/checkin', name: 'checkin', component: Checkin },
  { path: '/exchange', name: 'exchange', component: Exchange },
  { path: '/history', name: 'history', component: History },
  { path: '/rating', name: 'rating', component: Rating },

@@ -63,7 +63,6 @@
 import { computed, onMounted } from 'vue'
 import { usePointsStore } from '../stores/points.js'
 import {
-  CheckCircle2,
   Gift,
   Clock,
   Star,
@@ -80,7 +79,6 @@ onMounted(() => {
 })
 
 const actions = [
-  { to: '/checkin', label: '去打卡', icon: CheckCircle2 },
   { to: '/exchange', label: '去兑换', icon: Gift },
   { to: '/history', label: '看历史', icon: Clock },
   { to: '/rating', label: '家长评分', icon: Star }
