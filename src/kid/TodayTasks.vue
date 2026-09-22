@@ -60,7 +60,7 @@
           <span class="tt-xp-current">⚡ {{ levelLabel }}</span>
           <span>{{ levelNextDays }}</span>
         </div>
-        <div class="tt-xp-track">
+        <div class="tt-xp-track" @click="debugTriggerMorph" style="cursor:pointer" title="点击触发变身（调试入口）">
           <div class="tt-xp-fill" :style="{ width: levelProgress + '%' }"></div>
         </div>
       </div>
@@ -333,7 +333,7 @@
       <!-- 设置（v4：时间线 + 返回家长端） -->
       <section v-else class="tt-settings-page">
         <!-- 今日时间线 -->
-        <div class="tt-timeline">
+        <div class="tt-timeline tt-settings-card">
           <h2 class="tt-title">📅 今日安排</h2>
           <div class="tt-tl-list">
             <div
@@ -351,6 +351,10 @@
             </div>
           </div>
         </div>
+
+        <!-- 导入本周时间表 -->
+        <button class="btn-import" @click="importWeeklySchedule">📥 导入本周时间表</button>
+        <p v-if="importMsg" class="tt-wish-msg" :class="importMsg.startsWith('✅') ? 'is-ok' : 'is-err'">{{ importMsg }}</p>
 
         <!-- 设置入口 -->
         <div class="tt-settings">
@@ -382,6 +386,19 @@
         </div>
       </Transition>
     </Teleport>
+
+    <!-- TODO: QC提供变身GIF后替换此占位 -->
+    <Teleport to="body">
+      <Transition name="tt-pop">
+        <div v-if="showMorph" class="tt-morph-overlay" @click="closeMorph">
+          <div class="tt-morph-card">
+            <div class="tt-morph-emoji">🔥→🦸</div>
+            <div class="tt-morph-text">{{ levelLabel }} 变身！</div>
+            <div class="tt-morph-hint">点击关闭</div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
   </div>
 </template>
 
@@ -390,7 +407,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { usePointsStore } from '../stores/points.js'
 import { dateToWeekday, WEEKDAYS } from '../utils/weekday.js'
 import { playCoin, unlockAudio } from '../services/sound.js'
-import { speakEncouragement, speakAllDone, warmUpVoice } from '../services/voice.js'
+import { speakEncouragement, speakAllDone, speakText, warmUpVoice } from '../services/voice.js'
 import HeroSection from '../components/HeroSection.vue'
 import SpeechBubble from '../components/SpeechBubble.vue'
 import AllDoneEffect from '../components/AllDoneEffect.vue'
@@ -422,6 +439,37 @@ const mallSubmitting = ref(false)
 
 // v4: 成就详情
 const selectedAchievement = ref(null)
+
+// Phase 4: 导入本周时间表
+const importMsg = ref('')
+async function importWeeklySchedule() {
+  try {
+    // 幂等导入：seedWeeklyTasksIfEmpty 只在 weekly_tasks 表为空时导入
+    // （不 splice 内存数组——那会造成 store 与 IndexedDB 不一致）
+    const ok = await store.seedWeeklyTasksIfEmpty()
+    importMsg.value = ok ? '✅ 本周时间表已导入' : 'ℹ️ 课表已存在，无需重复导入'
+    setTimeout(() => { importMsg.value = '' }, 3000)
+  } catch (e) {
+    // 失败必须如实报错，不谎报成功
+    console.warn('[kid] import weekly schedule failed:', e)
+    importMsg.value = '❌ 导入失败：' + (e && e.message ? e.message : '未知错误')
+    setTimeout(() => { importMsg.value = '' }, 5000)
+  }
+}
+
+// Phase 4: 变身动画
+const showMorph = ref(false)
+// 注意：watch(ultramanLevel) 必须在 ultramanLevel computed 定义之后注册（TDZ），
+// 见下方 ultramanLevel 定义处
+// 调试入口：点击 XP 进度条也触发变身（方便验收，生产可移除）
+function debugTriggerMorph() { triggerMorph() }
+function triggerMorph() {
+  if (showMorph.value) return
+  showMorph.value = true
+  try { speakText('变身！' + levelLabel.value) } catch (_) {}
+  setTimeout(() => { showMorph.value = false }, 3000)
+}
+function closeMorph() { showMorph.value = false }
 
 // v4: 今日时间线
 const DEFAULT_TIMELINE = [
@@ -540,6 +588,10 @@ const levelLabel = computed(() => {
   if (s === 0) return '准备变身'
   return `奥特曼 Lv.${ultramanLevel.value}`
 })
+// 等级提升 → 触发变身动画（必须在 ultramanLevel 定义之后注册）
+watch(ultramanLevel, (newLv, oldLv) => {
+  if (newLv > oldLv) triggerMorph()
+})
 const LEVEL_THRESHOLDS = [0, 1, 3, 7, 14, 30] // 索引 0-5
 const levelProgress = computed(() => {
   const s = streak.value
@@ -547,7 +599,8 @@ const levelProgress = computed(() => {
   if (lv >= 5) return 100
   const current = LEVEL_THRESHOLDS[lv] || 0
   const next = LEVEL_THRESHOLDS[lv + 1] || 30
-  return Math.round(((s - current) / (next - current)) * 100)
+  // clamp：streak 可能低于当前等级阈值（如 lv=1 但 s=0），避免负数进度
+  return Math.max(0, Math.min(100, Math.round(((s - current) / (next - current)) * 100)))
 })
 const levelNextDays = computed(() => {
   const s = streak.value
@@ -961,4 +1014,120 @@ onBeforeUnmount(() => {
 .tt-record-points { font-weight:800;color:#4f46e5 }
 .tt-record-points.is-neg { color:#dc2626 }
 @media(min-width:640px){.tt-score-num{font-size:88px}}
+
+/* ============================================================
+   Phase 4: 变身动画占位（TODO: QC提供变身GIF后替换）
+   ============================================================ */
+.tt-morph-overlay {
+  position: fixed; inset: 0; z-index: 99999;
+  background: rgba(0,0,0,.6); backdrop-filter: blur(12px);
+  display: flex; align-items: center; justify-content: center;
+  animation: tt-morph-fade-in .3s ease-out;
+}
+.tt-morph-card {
+  text-align: center;
+  animation: tt-morph-pulse 1s ease-in-out infinite;
+}
+.tt-morph-emoji {
+  font-size: 96px; line-height: 1;
+  filter: drop-shadow(0 4px 24px rgba(251,191,36,.6));
+}
+.tt-morph-text {
+  margin-top: 16px; font-size: 32px; font-weight: 900; color: #fff;
+  text-shadow: 0 2px 12px rgba(0,0,0,.4);
+}
+.tt-morph-hint {
+  margin-top: 12px; font-size: 14px; color: rgba(255,255,255,.5);
+}
+@keyframes tt-morph-fade-in { 0%{opacity:0} 100%{opacity:1} }
+@keyframes tt-morph-pulse {
+  0%,100%{transform:scale(1)}
+  50%{transform:scale(1.15)}
+}
+
+/* ============================================================
+   Phase 4: 导入本周时间表按钮
+   ============================================================ */
+.btn-import {
+  margin-top: 12px; padding: 12px; border-radius: 14px;
+  border: 2px dashed #c7d2fe; background: rgba(250,245,255,.8);
+  color: #6366f1; font-size: 15px; font-weight: 700;
+  cursor: pointer; font-family: inherit; width: 100%;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  transition: background .15s;
+}
+.btn-import:hover { background: #eef2ff; }
+
+/* ============================================================
+   Phase 4: V2 商城卡片 — 玻璃效果 + hover 上浮
+   ============================================================ */
+.tt-mall-card {
+  transition: all .2s cubic-bezier(.34,1.56,.64,1);
+}
+.tt-mall-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 8px 24px rgba(79,70,229,.12);
+  border-color: #c7d2fe;
+}
+/* 兑换按钮：半透明软糖渐变（.btn-go 同款） */
+.tt-mall-yes {
+  display: inline-block; padding: 6px 16px; border-radius: 12px;
+  background: linear-gradient(135deg,rgba(52,211,153,.85),rgba(16,185,129,.9));
+  color: #fff; font-size: 14px; font-weight: 800;
+  box-shadow: 0 4px 12px rgba(16,185,129,.25);
+}
+
+/* ============================================================
+   Phase 4: 成就墙 — 玻璃底 + 锁定态降饱和 + hover 放大
+   ============================================================ */
+.tt-achieve {
+  background: rgba(255,255,255,.85); border-radius: 16px; padding: 16px;
+  border: 2px solid #e0e7ff; backdrop-filter: blur(8px);
+}
+.tt-achieve-head {
+  display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;
+}
+.tt-achieve-count { font-size: 14px; font-weight: 800; color: #6366f1; }
+.tt-achieve-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); gap: 10px;
+}
+.tt-achieve-badge {
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  padding: 10px 4px; border-radius: 14px;
+  background: rgba(255,255,255,.7); border: 2px solid #eef2ff;
+  cursor: pointer; transition: all .2s;
+}
+.tt-achieve-badge:hover { transform: scale(1.08); box-shadow: 0 4px 12px rgba(79,70,229,.1); }
+.tt-achieve-badge.is-locked {
+  opacity: .45; filter: grayscale(.6) saturate(.4);
+  pointer-events: auto; /* still clickable to show desc */
+}
+.tt-achieve-emoji { font-size: 28px; }
+.tt-achieve-name { font-size: 11px; font-weight: 700; color: #475569; text-align: center; line-height: 1.2; }
+
+/* ============================================================
+   Phase 4: 设置页 — settings-card 风格 + 时间行高亮
+   ============================================================ */
+.tt-settings-card {
+  background: rgba(255,255,255,.85); border-radius: 16px; padding: 16px;
+  border: 2px solid #e0e7ff; box-shadow: 0 2px 8px rgba(79,70,229,.04);
+  backdrop-filter: blur(8px);
+}
+.tt-tl-slot.is-current .tt-tl-content {
+  background: rgba(5,150,105,.06);
+  border-left: 3px solid #059669;
+  color: #059669; font-weight: 800;
+}
+.tt-tl-slot.is-current .tt-tl-line {
+  background: linear-gradient(180deg,#059669,#10b981);
+  box-shadow: 0 0 8px rgba(5,150,105,.4);
+}
+
+/* ============================================================
+   Phase 4: 底部/侧栏 tab 激活态 — 白字 + 半透明背景
+   ============================================================ */
+.tt-tab.is-active {
+  color: #fff; font-weight: 800;
+  background: rgba(255,255,255,.15); border-radius: 12px;
+}
 </style>
