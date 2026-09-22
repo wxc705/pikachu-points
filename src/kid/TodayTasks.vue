@@ -1,7 +1,7 @@
 <template>
-  <div class="tt-page" :class="{ 'tt-page--sidebar': isIPad }">
-    <!-- 左侧导航栏（v4.1 iPad 横版） -->
-    <nav v-if="isIPad" class="tt-sidebar">
+  <div class="tt-page" :class="{ 'tt-page--sidebar': isWide }">
+    <!-- 左侧导航栏（宽屏 ≥769px：桌面+iPad 横版统一显示，同设计稿） -->
+    <nav v-if="isWide" class="tt-sidebar">
       <div class="sb-avatar">
         <img v-if="ultramanDay > 0" :src="`/ultraman/icon-${ultramanDay}.png`" :alt="levelLabel" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" />
         <span class="sb-avatar-emoji" :style="ultramanDay > 0 ? 'display:none' : ''">{{ ultramanEmoji }}</span>
@@ -44,8 +44,8 @@
         :level-next-days="levelNextDays"
       />
 
-      <!-- 时间条（v4.1） -->
-      <div class="tt-time-bar" v-if="isIPad && currentTimelineSlot">
+      <!-- 时间条（设计稿：始终显示） -->
+      <div class="tt-time-bar" v-if="currentTimelineSlot">
         <div class="tt-tb-left">⏰ <span class="tt-tb-time">{{ String(Math.floor(nowMinutes / 60)).padStart(2, '0') }}:{{ String(nowMinutes % 60).padStart(2, '0') }}</span></div>
         <div style="text-align:right">
           <div class="tt-tb-right">当前：<span class="tt-tb-slot">{{ currentTimelineSlot.label }}</span></div>
@@ -54,8 +54,8 @@
         </div>
       </div>
 
-      <!-- XP 等级进度条 -->
-      <div class="tt-xp-section" v-if="isIPad">
+      <!-- XP 等级进度条（设计稿：始终显示） -->
+      <div class="tt-xp-section">
         <div class="tt-xp-labels">
           <span class="tt-xp-current">⚡ {{ levelLabel }}</span>
           <span>{{ levelNextDays }}</span>
@@ -194,6 +194,37 @@
             </div>
           </div>
         </div>
+
+        <!-- 今日时间段（设计稿：settings-card 在双栏下方，主页面常驻） -->
+        <div class="tt-settings-card">
+          <h3 class="tt-settings-title">
+            <span class="tt-settings-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span>
+            今日时间段
+          </h3>
+          <div class="tt-tl-list">
+            <div
+              v-for="(slot, i) in timelineSlots"
+              :key="i"
+              class="tt-tl-slot"
+              :class="{ 'is-current': slot.state === 'current', 'is-past': slot.state === 'past' }"
+            >
+              <div class="tt-tl-time">
+                <span class="tt-tl-icon">{{ slot.icon }}</span>
+                <span class="tt-tl-hour">{{ slot.time }}</span>
+              </div>
+              <div class="tt-tl-line"></div>
+              <div class="tt-tl-content">
+                {{ slot.label }}
+                <span v-if="slot.state === 'current'" class="tt-tl-now">← 当前</span>
+              </div>
+            </div>
+          </div>
+          <button class="btn-import" @click="importWeeklySchedule">
+            <span class="tt-settings-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg></span>
+            导入本周时间表
+          </button>
+          <p v-if="importMsg" class="tt-wish-msg" :class="importMsg.startsWith('✅') ? 'is-ok' : 'is-err'">{{ importMsg }}</p>
+        </div>
       </section>
 
       <!-- 我的基地（v4：积分 + 成就墙） -->
@@ -330,32 +361,8 @@
         </Teleport>
       </section>
 
-      <!-- 设置（v4：时间线 + 返回家长端） -->
+      <!-- 设置（v4：返回家长端） -->
       <section v-else class="tt-settings-page">
-        <!-- 今日时间线 -->
-        <div class="tt-timeline tt-settings-card">
-          <h2 class="tt-title">📅 今日安排</h2>
-          <div class="tt-tl-list">
-            <div
-              v-for="(slot, i) in timelineSlots"
-              :key="i"
-              class="tt-tl-slot"
-              :class="{ 'is-current': slot.state === 'current', 'is-past': slot.state === 'past' }"
-            >
-              <div class="tt-tl-time">
-                <span class="tt-tl-icon">{{ slot.icon }}</span>
-                <span class="tt-tl-hour">{{ slot.time }}</span>
-              </div>
-              <div class="tt-tl-line"></div>
-              <div class="tt-tl-content">{{ slot.label }}</div>
-            </div>
-          </div>
-        </div>
-
-        <!-- 导入本周时间表 -->
-        <button class="btn-import" @click="importWeeklySchedule">📥 导入本周时间表</button>
-        <p v-if="importMsg" class="tt-wish-msg" :class="importMsg.startsWith('✅') ? 'is-ok' : 'is-err'">{{ importMsg }}</p>
-
         <!-- 设置入口 -->
         <div class="tt-settings">
           <a class="tt-settings-link" href="#/">👨‍👩‍👧 返回家长端</a>
@@ -365,7 +372,7 @@
     </div><!-- /tt-main-area -->
 
     <!-- 底部导航：手机竖版用（iPad 用左侧栏） -->
-    <nav v-if="!isIPad" class="tt-tabs">
+    <nav v-if="!isWide" class="tt-tabs">
       <button class="tt-tab" :class="{ 'is-active': activeTab === 'today' }" @click="activeTab = 'today'">📋 冒险</button>
       <button class="tt-tab" :class="{ 'is-active': activeTab === 'points' }" @click="activeTab = 'points'">🏆 基地</button>
       <button class="tt-tab" :class="{ 'is-active': activeTab === 'apply' }" @click="activeTab = 'apply'">🛒 商城</button>
@@ -554,12 +561,9 @@ const nowMinutes = ref(nowToMinutes())
 
 // ---- 日期展示（HeroSection 内部处理，这里保留供底部 tab 用 ----
 
-// v4.1: iPad 检测
-const isIPad = computed(() => {
-  if (typeof navigator === 'undefined') return false
-  const ua = navigator.userAgent
-  return /iPad/i.test(ua) || (/Macintosh/i.test(ua) && navigator.maxTouchPoints > 1)
-})
+// 宽屏检测（设计稿：≥769px 显示侧栏布局，≤768px 手机隐藏侧栏走底部tab）
+const viewportW = ref(typeof window !== 'undefined' ? window.innerWidth : 1280)
+const isWide = computed(() => viewportW.value >= 769)
 const wdLabel = computed(() => {
   const [y, m, d] = store.today.split('-').map(Number)
   const wd = dateToWeekday(new Date(y, m - 1, d))
@@ -817,6 +821,7 @@ async function onConfirm() {
 }
 
 let _clockTimer = null
+let _resizeHandler = null
 onMounted(async () => {
   // 进入儿童端：隐藏家长端顶部导航（样式在 kid-style.css，通过 body class 作用域）
   document.body.classList.add('kid-mode')
@@ -829,11 +834,15 @@ onMounted(async () => {
     loading.value = false
   }
   _clockTimer = setInterval(() => { nowMinutes.value = nowToMinutes() }, 60_000)
+  // 视口宽度监听（侧栏/底部tab 随窗口切换）
+  _resizeHandler = () => { viewportW.value = window.innerWidth }
+  window.addEventListener('resize', _resizeHandler)
 })
 
 onBeforeUnmount(() => {
   document.body.classList.remove('kid-mode')
   if (_clockTimer) clearInterval(_clockTimer)
+  if (_resizeHandler) window.removeEventListener('resize', _resizeHandler)
 })
 </script>
 
@@ -841,7 +850,10 @@ onBeforeUnmount(() => {
 /* ============================================================
    V2 卡通冒险风 — 全局统一设计语言
    ============================================================ */
-.tt-page { min-height:100vh;min-height:100dvh;background:linear-gradient(160deg,#eef2ff 0%,#f0f4ff 50%,#faf5ff 100%);font-family:'DM Sans',system-ui,-apple-system,sans-serif;color:#1a1a2e;user-select:none;-webkit-user-select:none }
+/* 设计稿终稿背景：白底 + 两层径向光斑 */
+.tt-page { min-height:100vh;min-height:100dvh;background:radial-gradient(ellipse at 65% 40%,rgba(99,102,241,.06),transparent 70%),radial-gradient(ellipse at 30% 80%,rgba(168,85,247,.04),transparent 60%),#fff;font-family:'DM Sans',system-ui,-apple-system,sans-serif;color:#1a1a2e;user-select:none;-webkit-user-select:none }
+/* 设计稿 media query：≤768px 手机隐藏侧栏布局影响（侧栏已由 isWide 控制），双栏纵排 */
+@media (max-width:768px) { .tt-dual { flex-direction:column } }
 .tt-page--sidebar { display:flex;flex-direction:row }
 .tt-sidebar { flex:0 0 100px;background:linear-gradient(180deg,#4f46e5,#7c3aed);display:flex;flex-direction:column;align-items:center;padding:20px 0 12px;gap:2px;border-right:3px solid rgba(255,255,255,.1) }
 .sb-avatar { text-align:center;padding:0 0 16px;border-bottom:2px solid rgba(255,255,255,.15);width:100%;margin-bottom:12px }
@@ -1116,6 +1128,12 @@ onBeforeUnmount(() => {
   border: 2px solid #e0e7ff; box-shadow: 0 2px 8px rgba(79,70,229,.04);
   backdrop-filter: blur(8px);
 }
+/* 设计稿 settings-card 标题：靛蓝 + 时钟SVG图标 */
+.tt-settings-title { font-size:15px;font-weight:800;color:#4f46e5;margin-bottom:10px;display:flex;align-items:center;gap:8px }
+.tt-settings-ico { width:22px;height:22px;flex-shrink:0;display:inline-flex;align-items:center;justify-content:center }
+.tt-settings-ico svg { width:100%;height:100%;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;fill:none }
+/* 时间线"当前"标记 */
+.tt-tl-now { color:#059669;font-weight:800;font-size:13px }
 .tt-tl-slot.is-current .tt-tl-content {
   background: rgba(5,150,105,.06);
   border-left: 3px solid #059669;

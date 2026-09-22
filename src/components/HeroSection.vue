@@ -79,15 +79,19 @@ const totalPointsText = computed(() => props.totalPoints.toLocaleString('en-US')
 }
 .hero-icon { font-size: 34px; line-height: 1; flex: 0 0 auto; }
 .hero-col { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.hero-label { font-size: 19px; font-weight: 800; color: #8a7a5a; letter-spacing: 0.2px; }
-.hero-sub { font-size: 24px; font-weight: 900; color: #222; line-height: 1.1; }
-.hero-num { font-size: 28px; font-weight: 900; color: #ea580c; line-height: 1.1; font-variant-numeric: tabular-nums; }
+/* 设计稿 hlabel：小号灰色大写字距 */
+.hero-label { font-size: 12px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: .5px; }
+.hero-sub { font-size: 22px; font-weight: 900; color: #1a1a2e; line-height: 1.1; }
+/* 设计稿 hn：靛蓝数字（积分卡内由 .hero-points 覆盖为白） */
+.hero-num { font-size: 28px; font-weight: 900; color: #4f46e5; line-height: 1.1; font-variant-numeric: tabular-nums; }
+/* 设计稿 .ht：绿字浅绿底 pill（积分卡内覆盖白字） */
 .hero-today {
-  font-size: 16px; font-weight: 700; color: #fff;
-  background: linear-gradient(135deg,rgba(255,255,255,0.25),rgba(255,255,255,0.25));
+  font-size: 12px; font-weight: 800; color: #10b981;
+  background: rgba(16,185,129,.1);
   padding: 4px 12px; border-radius: 999px; margin-top: 4px;
 }
-.hero-level { font-size: 15px; font-weight: 700; color: #8a7a5a; }
+/* 设计稿 streak卡形态小字：靛蓝紫 */
+.hero-level { font-size: 13px; font-weight: 900; color: #6366f1; }
 .hero-points { background: linear-gradient(135deg,#ffb627,#ff8a00); border-color: #fff3c4; }
 .hero-points .hero-label, .hero-points .hero-num { color: #fff; text-shadow: 0 2px 4px rgba(0,0,0,0.12); }
 .hero-points .hero-today { color: #fff; background: rgba(255,255,255,0.25); }
