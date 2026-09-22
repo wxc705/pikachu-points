@@ -348,6 +348,19 @@ export const usePointsStore = defineStore('points', () => {
   return true
  }
 
+ // 恢复默认课表：删除全部 weekly_tasks 后按当前种子重建
+ // （seedWeeklyTasksIfEmpty 只在空表时导入，换课表后必须走这里）
+ // daily_checkins/checkins 不动 — 已得积分保留，仅任务定义换新
+ async function resetWeeklyTasks() {
+  const existing = await dbGetAllWeeklyTasks()
+  for (const t of existing) await dbDeleteWeeklyTask(t.id)
+  for (const t of WEEKLY_TASKS_SEED) {
+   await dbAddWeeklyTask({ ...t, isActive: true })
+  }
+  weeklyTasks.value = await dbGetAllWeeklyTasks()
+  return weeklyTasks.value.length
+ }
+
  // ----- 闯关管理（家长端）: weekly_tasks CRUD -----
  async function addWeeklyTaskItem(t) {
   const id = await dbAddWeeklyTask({
@@ -675,6 +688,7 @@ export const usePointsStore = defineStore('points', () => {
  todayTaskDoneIds,
  todayTaskEarned,
  seedWeeklyTasksIfEmpty,
+ resetWeeklyTasks,
  addWeeklyTaskItem,
  updateWeeklyTaskItem,
  deleteWeeklyTaskItem,

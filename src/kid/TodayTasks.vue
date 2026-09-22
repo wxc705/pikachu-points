@@ -480,13 +480,14 @@ function closeMorph() { showMorph.value = false }
 
 // v4: 今日时间线
 const DEFAULT_TIMELINE = [
-  { time: '早晨', icon: '🌅', label: '起床 + 洗漱 + 早餐', startMin: 0 },
-  { time: '8:20', icon: '🏫', label: '上学', startMin: 500 },
-  { time: '15:20', icon: '🏠', label: '放学', startMin: 920 },
-  { time: '16:00', icon: '📚', label: '完成作业', startMin: 960 },
-  { time: '17:00', icon: '🏃', label: '运动时间', startMin: 1020 },
-  { time: '18:00', icon: '🎮', label: '自由活动', startMin: 1080 },
-  { time: '20:00', icon: '🛁', label: '洗澡 + 睡前阅读', startMin: 1200 },
+  { time: '7:00', icon: '🌅', label: '起床 + 洗漱 + 早餐', startMin: 420 },
+  { time: '7:40', icon: '🎒', label: '出发上学', startMin: 460 },
+  { time: '16:10', icon: '🏫', label: '放学', startMin: 970 },
+  { time: '16:30', icon: '🏠', label: '到家 · 按课表闯关', startMin: 990 },
+  { time: '17:30', icon: '🍚', label: '吃饭 · 兴趣活动(按课表)', startMin: 1050 },
+  { time: '18:30', icon: '📝', label: '作业与提高', startMin: 1110 },
+  { time: '19:30', icon: '🎮', label: '自由安排(含阅读30分钟)', startMin: 1170 },
+  { time: '20:30', icon: '🪥', label: '洗漱准备睡觉', startMin: 1230 },
   { time: '21:00', icon: '🌙', label: '睡觉', startMin: 1260 }
 ]
 

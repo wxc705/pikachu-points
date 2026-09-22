@@ -14,6 +14,12 @@
  📥 导入每周闯关（课表种子）
  </button>
  <button
+ @click="onResetSeed"
+ class="px-3 py-1 rounded-full bg-white/25 text-white text-xs font-medium btn-press"
+ >
+ 🔄 恢复默认课表
+ </button>
+ <button
  @click="openTaskCreate()"
  class="px-3 py-1 rounded-full bg-secondary text-white text-sm font-semibold btn-press"
  >
@@ -459,6 +465,18 @@ const groups = computed(() => {
 async function onImportSeed() {
  const ok = await store.seedWeeklyTasksIfEmpty()
  showMsg(ok ? '✅ 已导入' : 'ℹ️ 已有闯关内容，未导入')
+}
+
+// 换课表：清空后按当前种子重建（打卡记录与已得积分保留）
+async function onResetSeed() {
+ if (!window.confirm('将删除现有全部闯关任务并恢复默认课表，已得积分和打卡记录保留。确定恢复？')) return
+ try {
+  const n = await store.resetWeeklyTasks()
+  showMsg(`✅ 已恢复默认课表（${n} 项）`)
+ } catch (e) {
+  console.warn('[parent] reset seed failed:', e)
+  showMsg('❌ 恢复失败：' + (e && e.message ? e.message : '未知错误'))
+ }
 }
 
 // 同 weekday 内交换 sortOrder（仅 active 之间）
