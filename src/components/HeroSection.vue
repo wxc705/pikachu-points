@@ -73,8 +73,9 @@ const totalPointsText = computed(() => props.totalPoints.toLocaleString('en-US')
   flex: 1; min-width: 160px;
   display: flex; align-items: center; gap: 12px;
   padding: 14px 18px; border-radius: 24px;
-  background: #ffffff; border: 2px solid #ffd97a;
-  box-shadow: rgba(255,183,39,0.12) 0 0 0 1px, rgba(0,0,0,0.04) 0 2px 6px, rgba(0,0,0,0.1) 0 6px 18px;
+  background: rgba(255,255,255,.85); border: 2px solid #e0e7ff;
+  box-shadow: 0 4px 16px rgba(79,70,229,.08);
+  backdrop-filter: blur(8px);
 }
 .hero-icon { font-size: 34px; line-height: 1; flex: 0 0 auto; }
 .hero-col { display: flex; flex-direction: column; gap: 2px; min-width: 0; }

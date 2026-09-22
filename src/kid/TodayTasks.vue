@@ -855,6 +855,8 @@ onBeforeUnmount(() => {
 .sb-item-icon svg { width:100%;height:100%;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;fill:none }
 .sb-spacer { flex:1 }
 .sb-parent { color:rgba(255,255,255,.3);font-size:14px;justify-content:center }
+/* tt-body 无规则时 flex-column 父容器下宽度按固有内容收缩(497px) → 显式拉满 */
+.tt-body { width:100%;min-width:0 }
 .tt-main-area { flex:1;display:flex;flex-direction:column;min-width:0;overflow-y:auto;padding:20px 24px;gap:16px }
 /* ============================================================
    v4.1: 时间条
@@ -907,7 +909,7 @@ onBeforeUnmount(() => {
 .tt-task-emoji.is-school { background:#eef2ff;border:2px solid #c7d2fe }
 .tt-task-emoji.is-expand { background:#fef3c7;border:2px solid #fde68a }
 .tt-task-info { flex:1;min-width:0 }
-.tt-task-name { font-size:16px;font-weight:700;color:#1a1a2e }
+.tt-task-name { font-size:16px;font-weight:700;color:#1a1a2e;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0 }
 .tt-task-meta { font-size:12px;font-weight:700;color:#94a3b8;margin-top:2px }
 .tt-task-meta .xp-tag { color:#6366f1 }
 .tt-task-meta .pt-tag { color:#d97706 }
@@ -918,9 +920,10 @@ onBeforeUnmount(() => {
 .tt-btn-icon { width:22px;height:22px;flex-shrink:0;position:relative;z-index:1 }
 .tt-btn-icon svg { width:100%;height:100%;stroke:currentColor;stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round;fill:none }
 .tt-btn-label { position:relative;z-index:1 }
-.tt-btn.go { background:linear-gradient(180deg,rgba(129,140,248,.85),rgba(99,102,241,.9),rgba(79,70,229,.95));box-shadow:0 8px 28px rgba(99,102,241,.3),0 2px 4px rgba(0,0,0,.08);backdrop-filter:blur(8px) }
-.tt-btn.go:hover { box-shadow:0 12px 36px rgba(99,102,241,.4);transform:scale(1.02) }
-.tt-btn.done { background:linear-gradient(180deg,rgba(52,211,153,.85),rgba(16,185,129,.9),rgba(5,150,105,.95));box-shadow:0 8px 28px rgba(16,185,129,.3),0 2px 4px rgba(0,0,0,.08);backdrop-filter:blur(8px) }
+/* 注意：模板动态类是 is-go / is-done，选择器必须带 is- 前缀 */
+.tt-btn.is-go { background:linear-gradient(180deg,rgba(129,140,248,.85),rgba(99,102,241,.9),rgba(79,70,229,.95));box-shadow:0 8px 28px rgba(99,102,241,.3),0 2px 4px rgba(0,0,0,.08);backdrop-filter:blur(8px) }
+.tt-btn.is-go:hover { box-shadow:0 12px 36px rgba(99,102,241,.4);transform:scale(1.02) }
+.tt-btn.is-done { background:linear-gradient(180deg,rgba(52,211,153,.85),rgba(16,185,129,.9),rgba(5,150,105,.95));box-shadow:0 8px 28px rgba(16,185,129,.3),0 2px 4px rgba(0,0,0,.08);backdrop-filter:blur(8px) }
 .tt-progress { display:flex;align-items:center;gap:10px;padding:4px 0 }
 .tt-progress-bar { flex:1;height:12px;background:#eef2ff;border-radius:99px;overflow:hidden }
 .tt-progress-fill { height:100%;border-radius:99px;transition:width .4s }
