@@ -14,8 +14,8 @@
 //   - 学校作业无积分 → 走家长端「今日作业」粘贴（daily_homework），不进本种子
 //
 // 假设（表格未写明,按合理默认,可随时改）:
-//   - 周二写字课在表格中是合并格(18:00起跨到8:00),与口述晚间规则冲突 → 取 18:00-18:30
-//   - 周二表格未列提高项 → 晚间只挂阅读
+//   - 周二写字课为合并格 C5:C8 = 18:00-20:00（QC 2026-09-22 确认：18:30 仍在上课，跨过作业时段）
+//   - 周二表格未列提高项 → 晚间只挂阅读（阅读按表格 8:00-8:30 = 20:00-20:30，顺延到写字课后）
 //   - 周末表格无时间列 → 时间为拟定（沿用旧课表作息）
 //   - 国象课按表格放在周日（旧课表为周六）
 //   - 平日早晨不再有多邻国（上学日早晨无时间,周末保留 8:00-9:00）
@@ -34,8 +34,8 @@ export const WEEKLY_TASKS_SEED = [
 
   // ================= 周二 =================
   { weekday: 2, timeSlot: '16:30-17:30', name: '跳绳500个', points: 1, category: '体能', sortOrder: 10 },
-  { weekday: 2, timeSlot: '18:00-18:30', name: '写字课', points: 2, category: '写字', sortOrder: 20 },
-  { weekday: 2, timeSlot: '19:30-20:30', name: '阅读', points: 1, category: '阅读', sortOrder: 30 },
+  { weekday: 2, timeSlot: '18:00-20:00', name: '写字课', points: 2, category: '写字', sortOrder: 20 },
+  { weekday: 2, timeSlot: '20:00-20:30', name: '阅读', points: 1, category: '阅读', sortOrder: 30 },
 
   // ================= 周三 =================
   { weekday: 3, timeSlot: '16:30-17:00', name: '口算50题', points: 1, category: '数学', sortOrder: 10 },

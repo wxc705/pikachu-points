@@ -181,7 +181,9 @@ export const usePointsStore = defineStore('points', () => {
   loaded.value = true
  // 首次进入即导入课表种子，保证今天就有任务可点
  await seedWeeklyTasksIfEmpty()
- }
+ // 已有课表的设备：修正种子初版的时段错误（幂等）
+ await migrateSeedFixes()
+}
 
  async function refresh() {
  loaded.value = false
@@ -352,13 +354,38 @@ export const usePointsStore = defineStore('points', () => {
  // （seedWeeklyTasksIfEmpty 只在空表时导入，换课表后必须走这里）
  // daily_checkins/checkins 不动 — 已得积分保留，仅任务定义换新
  async function resetWeeklyTasks() {
-  const existing = await dbGetAllWeeklyTasks()
-  for (const t of existing) await dbDeleteWeeklyTask(t.id)
-  for (const t of WEEKLY_TASKS_SEED) {
-   await dbAddWeeklyTask({ ...t, isActive: true })
-  }
-  weeklyTasks.value = await dbGetAllWeeklyTasks()
-  return weeklyTasks.value.length
+   const existing = await dbGetAllWeeklyTasks()
+   for (const t of existing) await dbDeleteWeeklyTask(t.id)
+   for (const t of WEEKLY_TASKS_SEED) {
+     await dbAddWeeklyTask({ ...t, isActive: true })
+   }
+   weeklyTasks.value = await dbGetAllWeeklyTasks()
+   return weeklyTasks.value.length
+ }
+
+ // 存量课表一次性修正（2026-09-22，幂等只改精确旧值，不覆盖家长手改行）：
+ // v5种子初版把周二写字课截成18:00-18:30 —— 实际xlsx合并格C5:C8=18:00-20:00，
+ // QC确认18:30仍在上课；周二阅读应按表格顺延到20:00-20:30。
+ const SEED_FIXES = [
+   {
+     match: (t) => t.weekday === 2 && t.name === '写字课' && t.timeSlot === '18:00-18:30',
+     patch: { timeSlot: '18:00-20:00' }
+   },
+   {
+     match: (t) => t.weekday === 2 && t.name === '阅读' && t.timeSlot === '19:30-20:30',
+     patch: { timeSlot: '20:00-20:30' }
+   }
+ ]
+ async function migrateSeedFixes() {
+   let changed = false
+   for (const t of weeklyTasks.value) {
+     const fix = SEED_FIXES.find((f) => f.match(t))
+     if (fix) {
+       await dbUpdateWeeklyTask(t.id, { ...fix.patch })
+       changed = true
+     }
+   }
+   if (changed) weeklyTasks.value = await dbGetAllWeeklyTasks()
  }
 
  // ----- 闯关管理（家长端）: weekly_tasks CRUD -----

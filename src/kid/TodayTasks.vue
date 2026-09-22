@@ -487,6 +487,11 @@ function timelineMin(hhmm) {
   const m = /^(\d{1,2}):(\d{2})/.exec(hhmm || '')
   return m ? Number(m[1]) * 60 + Number(m[2]) : null
 }
+// 解析时段终点: '18:00-20:00' -> 1200（无终点返回 null）
+function timelineEnd(hhmm) {
+  const m = /-\s*(\d{1,2}):(\d{2})/.exec(hhmm || '')
+  return m ? Number(m[1]) * 60 + Number(m[2]) : null
+}
 
 const timelineSlots = computed(() => {
   const now = nowMinutes.value
@@ -495,14 +500,25 @@ const timelineSlots = computed(() => {
   const weekend = wd >= 6
   const fmt = (min) => `${Math.floor(min / 60)}:${String(min % 60).padStart(2, '0')}`
 
-  // 当天闯关任务按时段起点分组: startMin -> { names, icon }
+  // 当天闯关任务按时段起点分组: startMin -> { names, icon, endMin(该起点任务的最晚终点) }
   const slotMap = {}
   for (const t of store.todayTasks) {
     const s = timelineMin(t.timeSlot)
     if (s == null) continue // '早晨' 等无具体时间的不进时间线
-    if (!slotMap[s]) slotMap[s] = { names: [], icon: emojiForTask(t) }
+    if (!slotMap[s]) slotMap[s] = { names: [], icon: emojiForTask(t), endMin: null }
     slotMap[s].names.push(t.name)
+    const e = timelineEnd(t.timeSlot)
+    if (e != null && e > s) slotMap[s].endMin = Math.max(slotMap[s].endMin || 0, e)
   }
+
+  // 任务真实跨度（起点<终点）—— 被长时段任务覆盖的固定锚点要剔除
+  // 例：周二写字课 18:00-20:00（xlsx合并格），18:30/19:30 的作业与提高、自由安排锚点
+  //     不该出现，18:30-20:00 时间线应停留在写字课
+  const taskSpans = Object.entries(slotMap)
+    .map(([s, g]) => ({ start: Number(s), end: g.endMin }))
+    .filter((sp) => sp.end != null && sp.end > sp.start)
+  const coveredByTask = (k) =>
+    slotMap[k] == null && taskSpans.some((sp) => sp.start < k && k < sp.end)
 
   const entries = []
   const push = (min, icon, label) => entries.push({ time: fmt(min), icon, label, startMin: min })
@@ -518,8 +534,8 @@ const timelineSlots = computed(() => {
   const fixedKeys = weekend ? [] : [990, 1110, 1170]
   const keys = new Set([
     ...Object.keys(slotMap).map(Number),
-    ...(mealMin != null ? [mealMin] : []),
-    ...fixedKeys
+    ...(mealMin != null && !coveredByTask(mealMin) ? [mealMin] : []),
+    ...fixedKeys.filter((k) => !coveredByTask(k))
   ])
 
   for (const s of [...keys].sort((a, b) => a - b)) {
