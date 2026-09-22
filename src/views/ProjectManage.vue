@@ -244,10 +244,11 @@ const CAT_META = {
  运动: { emoji: '🏃' },
  学习: { emoji: '📚' },
  生活: { emoji: '🧹' },
- 评价: { emoji: '⭐' }
+ 评价: { emoji: '⭐' },
+ 兑换: { emoji: '🎁' }
 }
 
-const categories = ['饮食', '运动', '学习', '生活', '评价']
+const categories = ['饮食', '运动', '学习', '生活', '评价', '兑换']
 
 function visibleProjects(cat) {
  const all = store.projectsByCategory.get(cat) || []

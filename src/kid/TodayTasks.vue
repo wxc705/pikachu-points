@@ -766,7 +766,7 @@ function checkAllDone() {
 
 // v4: 打卡学校作业
 async function tapHomework(task) {
-  if (task.done || busy.has(task.key)) return
+  if (task.done || busy.value.has(task.key)) return
   setBusy(task.key, true)
   setTimeout(() => setBusy(task.key, false), 3000)
   try {

@@ -305,7 +305,10 @@ export async function updateDailyHomework(id, patch) {
     await tx.done
     return null
   }
-  const next = { ...existing, ...patch, id }
+  // patch 可能携带 Vue reactive Proxy（store state里的 tasks），
+  // Proxy 无法被 structured clone → DataCloneError。JSON 往返剥离元数据。
+  const safePatch = JSON.parse(JSON.stringify(patch))
+  const next = { ...existing, ...safePatch, id }
   await store.put(next)
   await tx.done
   return next

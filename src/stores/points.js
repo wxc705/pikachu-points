@@ -235,19 +235,22 @@ export const usePointsStore = defineStore('points', () => {
  }
 
  async function addRequest(reward, pointsCost, note = '') {
- const entry = {
- reward,
- pointsCost,
- note,
- status: 'pending',
- viewed: false,
- date: today.value,
- createdAt: Date.now()
- }
- await dbAddRequest(entry)
- requests.value = [...requests.value, entry]
- return entry
- }
+  const entry = {
+  reward,
+  pointsCost,
+  note,
+  status: 'pending',
+  viewed: false,
+  date: today.value,
+  createdAt: Date.now()
+  }
+  // 必须把自增 id 写回内存 entry：审批 decide(r.id) 依赖它，
+  // 丢失 id 会导致 get(undefined) 永远更新失败
+  const id = await dbAddRequest(entry)
+  entry.id = id
+  requests.value = [...requests.value, entry]
+  return entry
+  }
 
  async function updateRequest(id, patch) {
    const next = await dbUpdateRequest(id, patch)

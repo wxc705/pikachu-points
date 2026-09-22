@@ -267,7 +267,8 @@ async function saveHomework() {
     hwRawText.value = ''
     setTimeout(() => { hwMsg.value = '' }, 3000)
   } catch (e) {
-    hwMsg.value = '❌ 保存失败'
+    console.warn('[parent] save homework failed:', e)
+    hwMsg.value = '❌ 保存失败' + (e && e.message ? ': ' + e.message : '')
   } finally {
     hwSaving.value = false
   }
