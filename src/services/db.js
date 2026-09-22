@@ -252,7 +252,7 @@ export async function updateWeeklyTask(id, patch) {
  await tx.done
  return null
  }
- const next = { ...existing, ...patch, id }
+ const next = { ...existing, ...JSON.parse(JSON.stringify(patch)), id }
  await store.put(next)
  await tx.done
  return next

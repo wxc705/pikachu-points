@@ -18,6 +18,8 @@ import {
 import {
   getAllWeeklyTasks as dbGetAllWeeklyTasks,
   addWeeklyTask as dbAddWeeklyTask,
+  updateWeeklyTask as dbUpdateWeeklyTask,
+  deleteWeeklyTask as dbDeleteWeeklyTask,
   getAllDailyCheckins as dbGetAllDailyCheckins,
   addDailyCheckin as dbAddDailyCheckin,
   getDailyHomeworkAll as dbGetAllDailyHomework,
@@ -346,6 +348,26 @@ export const usePointsStore = defineStore('points', () => {
   return true
  }
 
+ // ----- 闯关管理（家长端）: weekly_tasks CRUD -----
+ async function addWeeklyTaskItem(t) {
+  const id = await dbAddWeeklyTask({
+   weekday: Number(t.weekday), timeSlot: t.timeSlot || '早晨', name: t.name.trim(),
+   points: Number(t.points) || 1, category: t.category || '闯关',
+   sortOrder: t.sortOrder || Date.now() % 100000, isActive: true,
+   createdAt: Date.now()
+  })
+  weeklyTasks.value = await dbGetAllWeeklyTasks()
+  return id
+ }
+ async function updateWeeklyTaskItem(id, patch) {
+  await dbUpdateWeeklyTask(id, patch)
+  weeklyTasks.value = await dbGetAllWeeklyTasks()
+ }
+ async function deleteWeeklyTaskItem(id) {
+  await dbDeleteWeeklyTask(id)
+  weeklyTasks.value = await dbGetAllWeeklyTasks()
+ }
+
  // 今日任务：按当天 weekday 匹配，isActive 过滤，sortOrder 排序
  const todayTasks = computed(() => {
   const wd = dateToWeekday()
@@ -653,6 +675,9 @@ export const usePointsStore = defineStore('points', () => {
  todayTaskDoneIds,
  todayTaskEarned,
  seedWeeklyTasksIfEmpty,
+ addWeeklyTaskItem,
+ updateWeeklyTaskItem,
+ deleteWeeklyTaskItem,
  addTaskCheckin,
  approvedRequests,
  totalEarned,

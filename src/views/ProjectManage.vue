@@ -2,9 +2,199 @@
  <div class="space-y-4 animate-fade-in-up">
     <header class="rounded-2xl text-white shadow p-4 flex items-center justify-between" style="background: linear-gradient(135deg, var(--color-primary), var(--color-accent))">
  <div>
- <h1 class="text-lg font-bold">📝 项目管理</h1>
- <p class="text-xs mt-1 opacity-90">共 {{ store.projects.length }} 个项目</p>
+ <h1 class="text-lg font-bold">⚔️ 闯关管理</h1>
+ <p class="text-xs mt-1 opacity-90">设定每周闯关内容，小朋友每天在 iPad 上闯关</p>
+ <p v-if="msg" class="text-xs mt-1 font-medium">{{ msg }}</p>
  </div>
+ <div class="flex gap-2">
+ <button
+ @click="onImportSeed"
+ class="px-3 py-1 rounded-full bg-white/25 text-white text-xs font-medium btn-press"
+ >
+ 📥 导入每周闯关（课表种子）
+ </button>
+ <button
+ @click="openTaskCreate()"
+ class="px-3 py-1 rounded-full bg-secondary text-white text-sm font-semibold btn-press"
+ >
+ ＋ 新增
+ </button>
+ </div>
+ </header>
+
+ <!-- 按星期分组的闯关列表（weekly_tasks） -->
+ <div
+ v-for="g in groups"
+ :key="g.w"
+ class="rounded-2xl bg-surface shadow-sm p-4 card-lift"
+ >
+ <h2 class="text-sm font-bold text-ink-soft mb-2">
+ {{ g.label }}
+ <span
+ v-if="g.isToday"
+ class="ml-1 px-2 py-0.5 rounded-full bg-secondary text-white text-xs font-semibold align-middle"
+ >
+ 今天
+ </span>
+ <span class="text-xs text-ink-soft font-normal">（{{ g.active.length }} 项）</span>
+ </h2>
+ <ul v-if="g.active.length" class="divide-y">
+ <li
+ v-for="t in g.active"
+ :key="t.id"
+ class="py-2 flex items-center gap-2 bg-white rounded-xl p-3 mb-1"
+ >
+ <div class="flex-1 min-w-0">
+ <p class="font-medium text-sm truncate">{{ t.timeSlot }} ｜ {{ t.name }}</p>
+ <p class="text-xs text-ink-soft">+{{ t.points }} 分</p>
+ </div>
+ <button
+ @click="moveTaskSort(t, -1)"
+ class="w-7 h-7 rounded-full bg-primary-soft text-ink-soft text-xs btn-press"
+ title="上移"
+ >
+ ↑
+ </button>
+ <button
+ @click="moveTaskSort(t, 1)"
+ class="w-7 h-7 rounded-full bg-primary-soft text-ink-soft text-xs btn-press"
+ title="下移"
+ >
+ ↓
+ </button>
+ <button
+ @click="openTaskEdit(t)"
+ class="w-7 h-7 rounded-full bg-primary-soft text-secondary text-xs btn-press"
+ title="编辑"
+ >
+ ✎
+ </button>
+ <button
+ @click="toggleTask(t)"
+ class="w-7 h-7 rounded-full bg-primary-soft text-ink-soft text-xs btn-press"
+ title="停用"
+ >
+ ⏸
+ </button>
+ <button
+ @click="deleteTask(t)"
+ class="w-7 h-7 rounded-full bg-primary-soft text-secondary text-xs btn-press"
+ title="删除"
+ >
+ ✕
+ </button>
+ </li>
+ </ul>
+ <!-- 已停用：排在组内末尾，灰色 + 恢复 -->
+ <ul v-if="g.inactive.length" class="mt-1">
+ <li
+ v-for="t in g.inactive"
+ :key="t.id"
+ class="py-2 flex items-center gap-2 bg-white rounded-xl p-3 mb-1 opacity-50"
+ >
+ <div class="flex-1 min-w-0">
+ <p class="font-medium text-sm truncate line-through">{{ t.timeSlot }} ｜ {{ t.name }}</p>
+ <p class="text-xs text-ink-soft">+{{ t.points }} 分 · 已停用</p>
+ </div>
+ <button
+ @click="toggleTask(t)"
+ class="w-7 h-7 rounded-full bg-secondary text-white text-xs btn-press"
+ title="恢复"
+ >
+ ▶️
+ </button>
+ <button
+ @click="deleteTask(t)"
+ class="w-7 h-7 rounded-full bg-primary-soft text-secondary text-xs btn-press"
+ title="删除"
+ >
+ ✕
+ </button>
+ </li>
+ </ul>
+ <p v-if="!g.active.length && !g.inactive.length" class="text-xs text-ink-soft py-2">暂无闯关</p>
+ </div>
+
+ <!-- 闯关新增/编辑弹窗（weekly_tasks） -->
+ <div
+ v-if="taskModal.open"
+ class="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50"
+ @click.self="taskModal.open = false"
+ >
+ <div class="bg-surface w-full sm:max-w-md sm:rounded-2xl rounded-t-2xl p-5 space-y-4 max-h-[90vh] overflow-y-auto">
+ <h3 class="font-semibold text-lg">
+ {{ taskModal.editing ? '编辑闯关' : '新增闯关' }}
+ </h3>
+
+ <div>
+ <label class="text-sm text-ink-soft block mb-1">闯关名称</label>
+ <input
+ v-model="taskModal.form.name"
+ placeholder="如：思维、国象15min、阅读15min"
+ class="w-full bg-primary-soft/50 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+ />
+ </div>
+
+ <div>
+ <label class="text-sm text-ink-soft block mb-1">分值（1-10，固定分）</label>
+ <input
+ v-model.number="taskModal.form.points"
+ type="number"
+ min="1"
+ max="10"
+ class="w-full bg-primary-soft/50 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+ />
+ </div>
+
+ <div>
+ <label class="text-sm text-ink-soft block mb-1">时段</label>
+ <input
+ v-model="taskModal.form.timeSlot"
+ placeholder="早晨 或 16:30-17:00"
+ class="w-full bg-primary-soft/50 rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+ />
+ </div>
+
+ <div>
+ <label class="text-sm text-ink-soft block mb-1">星期几</label>
+ <div class="grid grid-cols-4 sm:grid-cols-7 gap-2">
+ <button
+ v-for="d in WEEKDAYS"
+ :key="d.n"
+ @click="taskModal.form.weekday = d.n"
+ :class="['py-2 rounded-xl text-sm btn-press', taskModal.form.weekday === d.n ? 'bg-secondary text-white font-semibold' : 'bg-primary-soft text-ink']"
+ >
+ {{ d.short }}
+ </button>
+ </div>
+ </div>
+
+ <p v-if="taskModal.error" class="text-sm text-secondary">{{ taskModal.error }}</p>
+
+ <div class="flex gap-2">
+ <button
+ @click="taskModal.open = false"
+ class="flex-1 py-2.5 rounded-xl bg-primary-soft text-ink font-semibold btn-press"
+ >
+ 取消
+ </button>
+ <button
+ @click="onTaskSave"
+ :disabled="taskModal.saving"
+ class="flex-1 py-2.5 rounded-xl bg-secondary text-white font-semibold disabled:opacity-50 btn-press"
+ >
+ {{ taskModal.saving ? '保存中…' : (taskModal.editing ? '保存' : '创建') }}
+ </button>
+ </div>
+ </div>
+ </div>
+
+ <!-- 原 projects 管理整体降级到底部（打卡页/周计划仍用） -->
+ <details class="rounded-2xl bg-surface shadow-sm p-4 card-lift">
+ <summary class="cursor-pointer text-sm font-bold text-ink-soft">📁 打卡项目管理（供打卡页/周计划使用）</summary>
+
+ <div class="flex items-center justify-between mt-3 mb-3">
+ <p class="text-xs text-ink-soft">共 {{ store.projects.length }} 个项目</p>
  <div class="flex gap-2">
  <button
  @click="filterActive = !filterActive"
@@ -19,12 +209,12 @@
  ＋ 新增
  </button>
  </div>
- </header>
+ </div>
 
  <div
  v-for="cat in categories"
  :key="cat"
- class="rounded-2xl bg-surface shadow-sm p-4 card-lift"
+ class="rounded-2xl bg-white shadow-sm p-4 mb-3"
  >
  <h2 class="text-sm font-bold text-ink-soft mb-2">
  {{ CAT_META[cat]?.emoji }} {{ cat }}
@@ -89,7 +279,7 @@
  <p v-else class="text-xs text-ink-soft py-2">暂无项目</p>
  </div>
 
- <!-- 编辑/新增弹窗 -->
+ <!-- 编辑/新增弹窗（projects） -->
  <div
  v-if="modal.open"
  class="fixed inset-0 bg-black/40 flex items-end sm:items-center justify-center z-50"
@@ -229,15 +419,127 @@
  </div>
  </div>
  </div>
+ </details>
  </div>
 </template>
 
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
 import { usePointsStore } from '../stores/points.js'
+import { WEEKDAYS, dateToWeekday } from '../utils/weekday.js'
 
 const store = usePointsStore()
 const filterActive = ref(false)
+
+// ----- 闯关管理（weekly_tasks） -----
+const msg = ref('')
+let msgTimer = null
+function showMsg(text) {
+ msg.value = text
+ clearTimeout(msgTimer)
+ msgTimer = setTimeout(() => { msg.value = '' }, 3000)
+}
+
+// 按星期 1-7 分组：active 在前（sortOrder 升序），已停用排组内末尾
+const groups = computed(() => {
+ const wd = dateToWeekday()
+ return [1, 2, 3, 4, 5, 6, 7].map((w) => {
+  const all = store.weeklyTasks.filter((t) => t.weekday === w)
+  const bySort = (a, b) => (a.sortOrder || 0) - (b.sortOrder || 0)
+  return {
+   w,
+   label: WEEKDAYS[w - 1].short,
+   isToday: w === wd,
+   active: all.filter((t) => t.isActive !== false).sort(bySort),
+   inactive: all.filter((t) => t.isActive === false).sort(bySort)
+  }
+ })
+})
+
+async function onImportSeed() {
+ const ok = await store.seedWeeklyTasksIfEmpty()
+ showMsg(ok ? '✅ 已导入' : 'ℹ️ 已有闯关内容，未导入')
+}
+
+// 同 weekday 内交换 sortOrder（仅 active 之间）
+async function moveTaskSort(t, dir) {
+ const list = groups.value.find((g) => g.w === t.weekday)?.active || []
+ const idx = list.findIndex((x) => x.id === t.id)
+ const swapIdx = idx + dir
+ if (idx < 0 || swapIdx < 0 || swapIdx >= list.length) return
+ const a = list[idx]
+ const b = list[swapIdx]
+ const aSort = a.sortOrder || 0
+ const bSort = b.sortOrder || 0
+ await store.updateWeeklyTaskItem(a.id, { sortOrder: bSort })
+ await store.updateWeeklyTaskItem(b.id, { sortOrder: aSort })
+}
+
+async function toggleTask(t) {
+ await store.updateWeeklyTaskItem(t.id, { isActive: t.isActive === false })
+}
+
+async function deleteTask(t) {
+ if (!confirm('确认删除闯关项？')) return
+ await store.deleteWeeklyTaskItem(t.id)
+}
+
+const taskModal = reactive({
+ open: false,
+ editing: null,
+ saving: false,
+ error: '',
+ form: { name: '', points: 1, timeSlot: '早晨', weekday: dateToWeekday() }
+})
+
+function openTaskCreate() {
+ taskModal.editing = null
+ taskModal.error = ''
+ taskModal.form = { name: '', points: 1, timeSlot: '早晨', weekday: dateToWeekday() }
+ taskModal.open = true
+}
+
+function openTaskEdit(t) {
+ taskModal.editing = t
+ taskModal.error = ''
+ taskModal.form = {
+  name: t.name,
+  points: t.points || 1,
+  timeSlot: t.timeSlot || '早晨',
+  weekday: t.weekday
+ }
+ taskModal.open = true
+}
+
+async function onTaskSave() {
+ taskModal.error = ''
+ if (!taskModal.form.name.trim()) {
+  taskModal.error = '请输入闯关名称'
+  return
+ }
+ const payload = {
+  name: taskModal.form.name.trim(),
+  points: Number(taskModal.form.points) || 1,
+  timeSlot: (taskModal.form.timeSlot || '').trim() || '早晨',
+  weekday: taskModal.form.weekday
+ }
+ taskModal.saving = true
+ try {
+  if (taskModal.editing) {
+   // 编辑不动 sortOrder / category
+   await store.updateWeeklyTaskItem(taskModal.editing.id, payload)
+  } else {
+   await store.addWeeklyTaskItem(payload)
+  }
+  taskModal.open = false
+ } catch (e) {
+  taskModal.error = '保存失败: ' + (e.message || e)
+ } finally {
+  taskModal.saving = false
+ }
+}
+
+// ----- 原 projects 管理（打卡页/周计划用，逻辑保留） -----
 
 const CAT_META = {
  饮食: { emoji: '🍚' },
@@ -276,13 +578,13 @@ function resetForm() {
  modal.editing = null
  modal.error = ''
  modal.form = {
- category: '饮食',
- name: '',
- mode: 'fixed',
- points: 1,
- rangeMin: 1,
- rangeMax: 3,
- sortOrder: 100
+  category: '饮食',
+  name: '',
+  mode: 'fixed',
+  points: 1,
+  rangeMin: 1,
+  rangeMax: 3,
+  sortOrder: 100
  }
 }
 
@@ -295,13 +597,13 @@ function openEdit(p) {
  modal.editing = p
  modal.error = ''
  modal.form = {
- category: p.category,
- name: p.name,
- mode: p.pointRange ? 'range' : 'fixed',
- points: p.points || 1,
- rangeMin: p.pointRange ? p.pointRange[0] : 1,
- rangeMax: p.pointRange ? p.pointRange[1] : 3,
- sortOrder: p.sortOrder || 100
+  category: p.category,
+  name: p.name,
+  mode: p.pointRange ? 'range' : 'fixed',
+  points: p.points || 1,
+  rangeMin: p.pointRange ? p.pointRange[0] : 1,
+  rangeMax: p.pointRange ? p.pointRange[1] : 3,
+  sortOrder: p.sortOrder || 100
  }
  modal.open = true
 }
@@ -313,49 +615,49 @@ function closeModal() {
 async function onSave() {
  modal.error = ''
  if (!modal.form.name.trim()) {
- modal.error = '请输入项目名称'
- return
+  modal.error = '请输入项目名称'
+  return
  }
  if (modal.form.mode === 'fixed' && (modal.form.points < 0 || modal.form.points > 10)) {
- modal.error = '分值必须在 0-10 之间'
- return
+  modal.error = '分值必须在 0-10 之间'
+  return
  }
  if (modal.form.mode === 'range') {
- if (modal.form.rangeMin < 0 || modal.form.rangeMin > 10 || modal.form.rangeMax < 0 || modal.form.rangeMax > 10) {
- modal.error = '范围分值必须在 0-10 之间'
- return
- }
- if (modal.form.rangeMax < modal.form.rangeMin) {
- modal.error = '最大分不能小于最小分'
- return
- }
+  if (modal.form.rangeMin < 0 || modal.form.rangeMin > 10 || modal.form.rangeMax < 0 || modal.form.rangeMax > 10) {
+   modal.error = '范围分值必须在 0-10 之间'
+   return
+  }
+  if (modal.form.rangeMax < modal.form.rangeMin) {
+   modal.error = '最大分不能小于最小分'
+   return
+  }
  }
  modal.saving = true
  try {
- const pointRange = modal.form.mode === 'range' ? [modal.form.rangeMin, modal.form.rangeMax] : null
- const points = modal.form.mode === 'fixed' ? modal.form.points : null
- if (modal.editing) {
- await store.updateProjectItem(modal.editing.id, {
- category: modal.form.category,
- name: modal.form.name,
- points,
- pointRange,
- sortOrder: modal.form.sortOrder
- })
- } else {
- await store.addProjectItem({
- category: modal.form.category,
- name: modal.form.name,
- points,
- pointRange,
- sortOrder: modal.form.sortOrder
- })
- }
- closeModal()
+  const pointRange = modal.form.mode === 'range' ? [modal.form.rangeMin, modal.form.rangeMax] : null
+  const points = modal.form.mode === 'fixed' ? modal.form.points : null
+  if (modal.editing) {
+   await store.updateProjectItem(modal.editing.id, {
+    category: modal.form.category,
+    name: modal.form.name,
+    points,
+    pointRange,
+    sortOrder: modal.form.sortOrder
+   })
+  } else {
+   await store.addProjectItem({
+    category: modal.form.category,
+    name: modal.form.name,
+    points,
+    pointRange,
+    sortOrder: modal.form.sortOrder
+   })
+  }
+  closeModal()
  } catch (e) {
- modal.error = '保存失败: ' + (e.message || e)
+  modal.error = '保存失败: ' + (e.message || e)
  } finally {
- modal.saving = false
+  modal.saving = false
  }
 }
 
