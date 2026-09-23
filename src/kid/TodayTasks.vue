@@ -1,10 +1,12 @@
 <template>
   <div class="tt-page" :class="{ 'tt-page--sidebar': isWide }">
+    <!-- 角色壁纸：三件套之一，半透明垫最底层（pointer-events 不挡交互） -->
+    <div class="tt-wall" :style="{ backgroundImage: `url(/ultraman/seq/${ultraChar.key}/${ultraChar.wall})` }"></div>
     <!-- 左侧导航栏（宽屏 ≥769px：桌面+iPad 横版统一显示，同设计稿） -->
     <nav v-if="isWide" class="tt-sidebar">
       <div class="sb-avatar">
-        <img v-if="ultramanDay > 0" :src="`/ultraman/icon-${ultramanDay}.png`" :alt="levelLabel" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" />
-        <span class="sb-avatar-emoji" :style="ultramanDay > 0 ? 'display:none' : ''">{{ ultramanEmoji }}</span>
+        <img :src="`/ultraman/seq/${ultraChar.key}/avatar.jpg`" :alt="ultraChar.name" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" />
+        <span class="sb-avatar-emoji" style="display:none">{{ ultramanEmoji }}</span>
         <span class="sb-avatar-level">{{ levelLabel }}</span>
       </div>
       <button class="sb-item" :class="{ 'is-active': activeTab === 'today' }" @click="activeTab = 'today'">
@@ -450,8 +452,9 @@
       <Transition name="tt-pop">
         <div v-if="showMorph" class="tt-morph-overlay" @click="closeMorph">
           <div class="tt-morph-card">
-            <div class="tt-morph-emoji">🔥→🦸</div>
-            <div class="tt-morph-text">{{ levelLabel }} 变身！</div>
+            <img v-if="morphImgOk" class="tt-morph-gif" :src="`/ultraman/seq/${ultraChar.key}/morph.gif`" :alt="ultraChar.name" @error="morphImgOk = false" />
+            <div v-else class="tt-morph-emoji">🔥→🦸</div>
+            <div class="tt-morph-text">{{ ultraChar.name }} 变身！</div>
             <div class="tt-morph-hint">点击关闭</div>
           </div>
         </div>
@@ -465,6 +468,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { usePointsStore } from '../stores/points.js'
 import { dateToWeekday, WEEKDAYS } from '../utils/weekday.js'
 import { playCoin, unlockAudio } from '../services/sound.js'
+import { getCharToday, markMorphToday } from '../services/ultraSeq.js'
 import { speakEncouragement, speakAllDone, speakText, warmUpVoice } from '../services/voice.js'
 import HeroSection from '../components/HeroSection.vue'
 import SpeechBubble from '../components/SpeechBubble.vue'
@@ -515,16 +519,19 @@ async function importWeeklySchedule() {
   }
 }
 
-// Phase 4: 变身动画
+// Phase 4: 变身动画 —— QC 规则(2026-09-23)：当天「今日进度」打满触发（每天一次），
+// 角色 = ultraSeq 序列当前位（周一清零、打满次日推进，详见 services/ultraSeq.js）
+const ultraChar = getCharToday()
 const showMorph = ref(false)
-// 注意：watch(ultramanLevel) 必须在 ultramanLevel computed 定义之后注册（TDZ），
-// 见下方 ultramanLevel 定义处
+const morphImgOk = ref(true)
 // 调试入口：点击 XP 进度条也触发变身（方便验收，生产可移除）
 function debugTriggerMorph() { triggerMorph() }
 function triggerMorph() {
   if (showMorph.value) return
   showMorph.value = true
-  try { speakText('变身！' + levelLabel.value) } catch (_) {}
+  morphImgOk.value = true
+  showAllDone.value = false // 进度满由变身唱主角，避免双弹层叠着关
+  try { speakText('变身！' + ultraChar.name) } catch (_) {}
   setTimeout(() => { showMorph.value = false }, 3000)
 }
 function closeMorph() { showMorph.value = false }
@@ -707,10 +714,7 @@ const levelLabel = computed(() => {
   if (s === 0) return '准备变身'
   return `奥特曼 Lv.${ultramanLevel.value}`
 })
-// 等级提升 → 触发变身动画（必须在 ultramanLevel 定义之后注册）
-watch(ultramanLevel, (newLv, oldLv) => {
-  if (newLv > oldLv) triggerMorph()
-})
+// 触发已改为「当天进度打满」（QC 规则，watch 移到 dailyProgress 定义之后注册）
 const LEVEL_THRESHOLDS = [0, 1, 3, 7, 14, 30] // 索引 0-5
 // 升级进度 = 每周（连续打卡天数，v4升级逻辑：中断回退到上一天等级，1/3/7/14/30天）
 const levelProgress = computed(() => {
@@ -733,6 +737,12 @@ const dailyDone = computed(
 const dailyProgress = computed(() =>
   dailyTotal.value > 0 ? Math.round((dailyDone.value / dailyTotal.value) * 100) : 0
 )
+// QC 规则：当天进度打满触发变身（每天一次）；打满标记指针待推进，次日换下一个角色
+watch([dailyDone, dailyTotal], () => {
+  if (dailyTotal.value > 0 && dailyDone.value >= dailyTotal.value && markMorphToday()) {
+    triggerMorph()
+  }
+})
 const levelNextDays = computed(() => {
   const s = streak.value
   const lv = ultramanLevel.value
@@ -1246,6 +1256,11 @@ onBeforeUnmount(() => {
 .tt-task { position:relative }
 .tt-card-x { position:absolute; top:5px; left:6px; width:24px; height:24px; border-radius:50%; border:1.5px solid #fecaca; background:rgba(254,226,226,.95); color:#ef4444; font-size:12px; font-weight:800; line-height:1; cursor:pointer; display:flex; align-items:center; justify-content:center; padding:0; z-index:2 }
 .tt-card-x:active { transform:scale(.9) }
+/* 角色壁纸（三件套）：半透明垫底，主内容 z-index 压上去 */
+.tt-wall { position:fixed; inset:0; z-index:0; background-position:center; background-size:cover; background-repeat:no-repeat; opacity:.14; pointer-events:none }
+.tt-main-area { position:relative; z-index:1 }
+/* 变身 GIF（横版素材，深底卡片居中） */
+.tt-morph-gif { display:block; width:min(72vw,540px); max-height:52vh; border-radius:20px; background:#0a0a1a; margin:0 auto 12px }
 .tt-tabs { display:flex;background:rgba(255,255,255,.9);border-top:1px solid #e0e7ff;padding:8px 0;backdrop-filter:blur(8px) }
 .tt-tab { flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 4px;border:none;background:transparent;color:#94a3b8;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;transition:color .15s }
 .tt-tab.is-active { color:#4f46e5;font-weight:800 }
