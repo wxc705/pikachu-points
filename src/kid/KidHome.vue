@@ -12,7 +12,7 @@
       <div style="display:flex;flex-direction:column;align-items:center;gap:2px;">
         <div class="kid-streak-text">
           <span class="kid-streak-flame">🔥</span>
-          连续打卡 <strong>{{ streak }}</strong> 天
+          连续变身 <strong>{{ streak }}</strong> 天
         </div>
         <span v-if="ultramanLevel" class="kid-level-tag">{{ levelLabel }}</span>
       </div>

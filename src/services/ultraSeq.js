@@ -38,10 +38,17 @@ function save(s) {
   try { localStorage.setItem(KEY, JSON.stringify(s)) } catch (_) {}
 }
 
-// 对齐状态：跨周清零；跨日应用「昨日打满」的推进（advance 在换日时才兑现）
+// 对齐状态：跨周清零（只重置角色指针，morphDays 连胜史保留）；跨日应用「昨日打满」的推进
 function sync(today, weekKey, s) {
   if (!s || s.weekKey !== weekKey) {
-    return { weekKey, pos: 0, shownDate: today, advance: false, morphDate: null }
+    return {
+      weekKey,
+      pos: 0,
+      shownDate: today,
+      advance: false,
+      morphDate: (s && s.morphDate) || null,
+      morphDays: (s && Array.isArray(s.morphDays)) ? s.morphDays : []
+    }
   }
   if (s.shownDate !== today) {
     if (s.advance) {
@@ -50,6 +57,7 @@ function sync(today, weekKey, s) {
     }
     s.shownDate = today
   }
+  if (!Array.isArray(s.morphDays)) s.morphDays = []
   return s
 }
 
@@ -72,8 +80,20 @@ export function markMorphToday() {
   }
   s.morphDate = today
   s.advance = true
+  if (!Array.isArray(s.morphDays)) s.morphDays = []
+  if (!s.morphDays.includes(today)) {
+    s.morphDays.push(today)
+    if (s.morphDays.length > 60) s.morphDays = s.morphDays.slice(-60)
+  }
   save(s)
   return true
+}
+
+// 变身过的天数（连胜真源；QC 2026-09-23：只有奥特曼变身才算连胜）
+export function getMorphDays() {
+  const today = todayStr()
+  const s = sync(today, weekKeyOf(today), load())
+  return Array.isArray(s.morphDays) ? s.morphDays : []
 }
 
 // 排查用：读当前原始状态

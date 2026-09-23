@@ -244,7 +244,7 @@
           <div class="tt-stat">
             <span class="tt-stat-icon">🔥</span>
             <span class="tt-stat-num">{{ streak }}天</span>
-            <span class="tt-stat-label">连续打卡</span>
+            <span class="tt-stat-label">连续变身</span>
           </div>
           <div class="tt-stat">
             <span class="tt-stat-icon">🎯</span>
@@ -468,7 +468,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { usePointsStore } from '../stores/points.js'
 import { dateToWeekday, WEEKDAYS } from '../utils/weekday.js'
 import { playCoin, unlockAudio } from '../services/sound.js'
-import { getCharToday, markMorphToday } from '../services/ultraSeq.js'
+import { getCharToday } from '../services/ultraSeq.js'
 import { speakEncouragement, speakAllDone, speakText, warmUpVoice } from '../services/voice.js'
 import HeroSection from '../components/HeroSection.vue'
 import SpeechBubble from '../components/SpeechBubble.vue'
@@ -716,7 +716,7 @@ const levelLabel = computed(() => {
 })
 // 触发已改为「当天进度打满」（QC 规则，watch 移到 dailyProgress 定义之后注册）
 const LEVEL_THRESHOLDS = [0, 1, 3, 7, 14, 30] // 索引 0-5
-// 升级进度 = 每周（连续打卡天数，v4升级逻辑：中断回退到上一天等级，1/3/7/14/30天）
+// 升级进度 = 连续变身天数（v4升级逻辑：中断回退到上一天等级，1/3/7/14/30天；QC：只有变身才算连胜）
 const levelProgress = computed(() => {
   const s = streak.value
   const lv = ultramanLevel.value
@@ -738,8 +738,9 @@ const dailyProgress = computed(() =>
   dailyTotal.value > 0 ? Math.round((dailyDone.value / dailyTotal.value) * 100) : 0
 )
 // QC 规则：当天进度打满触发变身（每天一次）；打满标记指针待推进，次日换下一个角色
+// 连胜真源 = 变身日（store.markMorphDay 内部写 morphDays 并刷新 ref）
 watch([dailyDone, dailyTotal], () => {
-  if (dailyTotal.value > 0 && dailyDone.value >= dailyTotal.value && markMorphToday()) {
+  if (dailyTotal.value > 0 && dailyDone.value >= dailyTotal.value && store.markMorphDay()) {
     triggerMorph()
   }
 })

@@ -33,6 +33,7 @@ import { DEFAULT_THEME_ID, getTheme } from '../themes/index.js'
 import { WEEKLY_TASKS_SEED } from '../services/weeklyTasksSeed.js'
 import { push as syncPush, pull as syncPull, sync as syncBoth, onSyncChange, getSyncState, clearCloud as syncClearCloud } from '../services/sync.js'
 import { dateToWeekday } from '../utils/weekday.js'
+import { getCharToday, markMorphToday, getMorphDays } from '../services/ultraSeq.js'
 
 const MILESTONES = [100, 500, 1000, 5000]
 const MILESTONE_KEY = 'pikachu-points:reached-milestones'
@@ -147,24 +148,33 @@ export const usePointsStore = defineStore('points', () => {
 
  const todayNet = computed(() => todayEarned.value - todaySpent.value)
 
- //连续打卡天数：今天（或昨天）起往前数连续有任意 checkin 的天数
+ // 连胜（QC 2026-09-23：只有「奥特曼变身」= 当天进度打满才算；拨付/罚分/单纯打卡不续）
+ // morphDays 存 store ref 保证反应性（变身当刻 hero 立即跳数）
+ const morphDays = ref(getMorphDays())
  const currentStreak = computed(() => {
- if (checkins.value.length ===0) return 0
- const dates = new Set(checkins.value.map((c) => c.date))
- const td = today.value
- let cursor = new Date(td + 'T00:00:00')
- // 今天还没打卡时，从昨天开始数（保留昨日起的连胜）
- if (!dates.has(td)) {
- cursor.setDate(cursor.getDate() -1)
- if (!dates.has(dateToStr(cursor))) return 0
- }
- let streak =0
- while (dates.has(dateToStr(cursor))) {
- streak++
- cursor.setDate(cursor.getDate() -1)
- }
- return streak
+  const days = morphDays.value
+  if (!days.length) return 0
+  const td = today.value
+  let cursor = new Date(td + 'T00:00:00')
+  // 今天还没变身 → 从昨天起数（保住已有连胜，今天变身后再 +1）
+  if (!days.includes(td)) {
+   cursor.setDate(cursor.getDate() - 1)
+   if (!days.includes(dateToStr(cursor))) return 0
+  }
+  let streak = 0
+  while (days.includes(dateToStr(cursor))) {
+   streak++
+   cursor.setDate(cursor.getDate() - 1)
+  }
+  return streak
  })
+
+ // 变身日标记（组件 watch 调用）：写 localStorage + 刷新 ref，返回是否今天首次
+ function markMorphDay() {
+  const fresh = markMorphToday()
+  morphDays.value = getMorphDays()
+  return fresh
+ }
 
  async function load(force = false) {
   if (loaded.value && !force) return
@@ -681,10 +691,10 @@ export const usePointsStore = defineStore('points', () => {
    { id: '500', name: '五百分侠', emoji: '💎', desc: '累计获得 500 分' },
    { id: '1000', name: '千分王者', emoji: '👑', desc: '累计获得 1000 分' },
    { id: '5000', name: '万分传说', emoji: '🌈', desc: '累计获得 5000 分' },
-   { id: 'streak3', name: '三日连续', emoji: '🔥', desc: '连续打卡 3 天' },
-   { id: 'streak7', name: '七日达人', emoji: '⭐', desc: '连续打卡 7 天' },
-   { id: 'streak14', name: '半月英雄', emoji: '🏆', desc: '连续打卡 14 天' },
-   { id: 'streak30', name: '月度冠军', emoji: '👑', desc: '连续打卡 30 天' },
+   { id: 'streak3', name: '三日连续', emoji: '🔥', desc: '连续变身 3 天' },
+   { id: 'streak7', name: '七日达人', emoji: '⭐', desc: '连续变身 7 天' },
+   { id: 'streak14', name: '半月英雄', emoji: '🏆', desc: '连续变身 14 天' },
+   { id: 'streak30', name: '月度冠军', emoji: '👑', desc: '连续变身 30 天' },
    { id: 'read30', name: '阅读小达人', emoji: '📚', desc: '阅读任务累计 30 次' },
    { id: 'chess30', name: '象棋小王子', emoji: '♟️', desc: '国象任务累计 30 次' },
    { id: 'write30', name: '练字高手', emoji: '✏️', desc: '练字任务累计 30 次' },
@@ -861,6 +871,7 @@ export const usePointsStore = defineStore('points', () => {
  todayCheckedProjectIds,
  todayProjectCounts,
  currentStreak,
+ markMorphDay,
  load,
  refresh,
  addCheckin,
