@@ -279,6 +279,12 @@ export async function getAllDailyCheckins() {
   return db.getAll('daily_checkins')
 }
 
+// 云同步 pull 用：带显式 id 覆盖写（本地 add 是自增）
+export async function putDailyCheckin(entry) {
+  const db = await openDB()
+  return db.put('daily_checkins', entry)
+}
+
 // ----- daily_homework (v4): 每日学校作业 -----
 // homework: { date, tasks: [{ name, points, done }], source, createdAt }
 export async function addDailyHomework(homework) {

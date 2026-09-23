@@ -12,6 +12,10 @@
 > **影响**：家长端↔iPad 儿童端跨设备同步不可用，云同步按钮会报
 > "❌ 推送失败/同步失败"。**这是预期网络行为，不是代码 bug**（skill 已记录）。
 > 同设备（家长端+儿童端同浏览器）走 IndexedDB 完全正常，不影响单机使用。
+>
+> **同步表清单已收敛（2026-09-22，随本文件一起入库）**：`sync.js` 现在同步 **6 张表**：
+> `checkins` / `exchange_requests` / `projects` / `daily_homework` / **`weekly_tasks`** / **`daily_checkins`**。
+> 旧 `weekly_plan` 已从同步里移除（周计划页入口已下线，两个儿童端统一读 `weekly_tasks`）。
 
 ---
 
@@ -88,7 +92,9 @@
 2. 若走自建 Supabase（改动最小）：
    - 买一台国内轻量服务器（腾讯云轻量，CNY 计价）
    - 按 https://supabase.com/docs 自托管（docker compose 一套），或用 `supabase/self-hosted` 镜像
-   - 建同样的 4 张表：`weekly_plan` / `projects` / `checkins` / `exchange_requests`（结构参照 `src/services/sync.js` 里的字段）
+   - 建 6 张表：`checkins` / `exchange_requests` / `projects` / `daily_homework` / `weekly_tasks` / `daily_checkins`（结构字段逐一参照 `src/services/sync.js` push 段的映射；`weekly_plan` 已废弃不用建）
+   - ⚠️ `daily_checkins` 建议加 `unique(date, task_id)` 约束：两台设备离线各打同一任务会生成两条不同 id 的记录，upsert 按 id 合并会双记分——有该唯一约束后按 `(date,task_id)` 冲突合并即可去重
+   - `weekly_tasks` 同步语义（代码已实现）：同 id 云端优先单行覆盖，本地多出的行保留（不删，打卡 taskId 引用它）；**删除不同步、暂无 LWW**，后端落地后若需要再细化
    - 把 `.env.production` 的 URL 换成你的服务器域名，key 换成自建实例的 anon key
    - `npm run build` + push 部署
 3. 数据迁移：旧设备各自"推送"一次到新后端（或用 Supabase dashboard 手导 CSV）

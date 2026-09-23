@@ -3,7 +3,7 @@
 // 当前实现：Supabase（真云端，跨设备同步）
 // 未来：可以一行 import 切到 localStorage 模式（fallback）
 
-import { getAllCheckins, getAllRequests, getProjects, putCheckin, putProject, putExchangeRequest, getAllWeeklyPlans, setWeeklyPlan, getDailyHomeworkAll, putDailyHomework } from './db.js'
+import { getAllCheckins, getAllRequests, getProjects, putCheckin, putProject, putExchangeRequest, getAllWeeklyTasks, putWeeklyTask, getAllDailyCheckins, putDailyCheckin, getDailyHomeworkAll, putDailyHomework } from './db.js'
 import { supabase, isSupabaseConfigured } from './supabase.js'
 
 // ---- 状态订阅 ----
@@ -46,11 +46,12 @@ export async function push() {
  state.lastError = null
  notify()
  try {
- const [checkins, requests, projects, weeklyPlans] = await Promise.all([
- getAllCheckins(),
- getAllRequests(),
- getProjects(),
- getAllWeeklyPlans()
+ const [checkins, requests, projects, weeklyTasks, dailyCheckins] = await Promise.all([
+   getAllCheckins(),
+   getAllRequests(),
+   getProjects(),
+   getAllWeeklyTasks(),
+   getAllDailyCheckins()
  ])
 
  let pushed = 0
@@ -115,17 +116,25 @@ export async function push() {
      pushed += rows.length
    } catch (e) { errors.push({ table: 'projects', error: e.message || String(e) }) }
  }
- // weekly_plan
- if (weeklyPlans.length) {
-   const rows = weeklyPlans.map((w) => ({
-     weekday: w.weekday,
-     project_ids: w.projectIds
+ // weekly_tasks (v5 闯关课表) — 家长配置
+ if (weeklyTasks.length) {
+   const rows = weeklyTasks.map((t) => ({
+     id: t.id,
+     weekday: t.weekday,
+     time_slot: t.timeSlot,
+     name: t.name,
+     points: t.points,
+     category: t.category,
+     sort_order: t.sortOrder,
+     is_active: t.isActive !== false,
+     created_at: t.createdAt || null,
+     updated_at: nowIso()
    }))
    try {
-     const { error } = await supabase.from('weekly_plan').upsert(rows, { onConflict: 'weekday' })
+     const { error } = await supabase.from('weekly_tasks').upsert(rows, { onConflict: 'id' })
      if (error) throw error
      pushed += rows.length
-   } catch (e) { errors.push({ table: 'weekly_plan', error: e.message || String(e) }) }
+   } catch (e) { errors.push({ table: 'weekly_tasks', error: e.message || String(e) }) }
  }
  // daily_homework (v4)
  const dailyHomework = await getDailyHomeworkAll()
@@ -142,7 +151,26 @@ export async function push() {
      if (error) throw error
      pushed += rows.length
    } catch (e) { errors.push({ table: 'daily_homework', error: e.message || String(e) }) }
- }
+   }
+   // daily_checkins (v4.1 闯关打卡流水) — append-only，按 id upsert
+   if (dailyCheckins.length) {
+   const rows = dailyCheckins.map((d) => ({
+     id: d.id,
+     date: d.date,
+     task_id: d.taskId,
+     task_name: d.taskName,
+     category: d.category,
+     points: d.points,
+     completed_at: d.completedAt || null,
+     checked_by: d.checkedBy || 'kid',
+     updated_at: nowIso()
+   }))
+   try {
+     const { error } = await supabase.from('daily_checkins').upsert(rows, { onConflict: 'id' })
+     if (error) throw error
+     pushed += rows.length
+   } catch (e) { errors.push({ table: 'daily_checkins', error: e.message || String(e) }) }
+   }
 
  const ts = nowIso()
  state.lastSyncedAt = ts
@@ -174,12 +202,13 @@ export async function pull() {
  try {
  // 逐表拉取，表不存在/无权访问只记错误，不连坐其他表（核心打卡/兑换数据优先）
  const pullErrors = []
- const [cr, rr, pr, wr, dhr] = await Promise.allSettled([
+ const [cr, rr, pr, wt, dhr, dcr] = await Promise.allSettled([
    supabase.from('checkins').select('*'),
    supabase.from('exchange_requests').select('*'),
    supabase.from('projects').select('*'),
-   supabase.from('weekly_plan').select('*'),
-   supabase.from('daily_homework').select('*')
+   supabase.from('weekly_tasks').select('*'),
+   supabase.from('daily_homework').select('*'),
+   supabase.from('daily_checkins').select('*')
  ])
  const cloudCheckins = cr.status === 'fulfilled' && !cr.value.error ? cr.value.data : null
  if (cr.status === 'rejected' || (cr.value && cr.value.error)) pullErrors.push({ table: 'checkins', error: cr.status === 'rejected' ? cr.reason.message : cr.value.error.message })
@@ -187,10 +216,12 @@ export async function pull() {
  if (rr.status === 'rejected' || (rr.value && rr.value.error)) pullErrors.push({ table: 'exchange_requests', error: rr.status === 'rejected' ? rr.reason.message : rr.value.error.message })
  const cloudProjects = pr.status === 'fulfilled' && !pr.value.error ? pr.value.data : null
  if (pr.status === 'rejected' || (pr.value && pr.value.error)) pullErrors.push({ table: 'projects', error: pr.status === 'rejected' ? pr.reason.message : pr.value.error.message })
- const cloudWeeklyPlans = wr.status === 'fulfilled' && !wr.value.error ? wr.value.data : null
- if (wr.status === 'rejected' || (wr.value && wr.value.error)) pullErrors.push({ table: 'weekly_plan', error: wr.status === 'rejected' ? wr.reason.message : wr.value.error.message })
+ const cloudWeeklyTasks = wt.status === 'fulfilled' && !wt.value.error ? wt.value.data : null
+ if (wt.status === 'rejected' || (wt.value && wt.value.error)) pullErrors.push({ table: 'weekly_tasks', error: wt.status === 'rejected' ? wt.reason.message : wt.value.error.message })
  const cloudHomework = dhr.status === 'fulfilled' && !dhr.value.error ? dhr.value.data : null
  if (dhr.status === 'rejected' || (dhr.value && dhr.value.error)) pullErrors.push({ table: 'daily_homework', error: dhr.status === 'rejected' ? dhr.reason.message : dhr.value.error.message })
+ const cloudDailyCheckins = dcr.status === 'fulfilled' && !dcr.value.error ? dcr.value.data : null
+ if (dcr.status === 'rejected' || (dcr.value && dcr.value.error)) pullErrors.push({ table: 'daily_checkins', error: dcr.status === 'rejected' ? dcr.reason.message : dcr.value.error.message })
  if (pullErrors.length) state.lastError = pullErrors.map((x) => `${x.table}: ${x.error}`).join(' | ')
 
  const localCheckins = await getAllCheckins()
@@ -288,10 +319,44 @@ export async function pull() {
  }
  }
 
- // ---- weekly_plan 合并 ----
- // weekly_plan 是家长配置，云端优先，无需 LWW 比较
- for (const w of (cloudWeeklyPlans || [])) {
-   await setWeeklyPlan(w.weekday, w.project_ids)
+ // ---- weekly_tasks 合并 (v5 闯关课表) ----
+ // 家长配置：同 id 云端优先单行覆盖；本地多出的行保留（daily_checkins.taskId 引用它，绝不删）
+ // 已知限制：删除不同步、无 LWW —— 待后端方案落地后细化（见 TODO-supabase-sync.md）
+ const localWeeklyTasks = await getAllWeeklyTasks()
+ const localTaskIds = new Set(localWeeklyTasks.map((t) => t.id))
+ for (const t of (cloudWeeklyTasks || [])) {
+   const row = {
+     id: t.id,
+     weekday: t.weekday,
+     timeSlot: t.time_slot,
+     name: t.name,
+     points: t.points,
+     category: t.category,
+     sortOrder: t.sort_order,
+     isActive: t.is_active !== false,
+     createdAt: t.created_at || 0
+   }
+   if (localTaskIds.has(t.id)) merged++
+   else pulled++
+   await putWeeklyTask(row)
+ }
+
+ // ---- daily_checkins 合并 (v4.1) ----
+ // append-only 流水：按 id 并集，两台设备的打卡都保留，不覆盖不删
+ const localDaily = await getAllDailyCheckins()
+ const localDailyIds = new Set(localDaily.map((d) => d.id))
+ for (const d of (cloudDailyCheckins || [])) {
+   if (localDailyIds.has(d.id)) continue
+   await putDailyCheckin({
+     id: d.id,
+     date: d.date,
+     taskId: d.task_id,
+     taskName: d.task_name,
+     category: d.category,
+     points: d.points,
+     completedAt: d.completed_at || 0,
+     checkedBy: d.checked_by || 'kid'
+   })
    pulled++
  }
 

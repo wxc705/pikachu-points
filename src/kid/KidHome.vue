@@ -123,20 +123,15 @@ function emojiForName(name) {
   return '⭐'
 }
 
-// ---- 把 project 归一化成 { key, name, points, emoji, pid, category } ----
-// 来源：store.todayRecommended（周计划）或 store.projects（兜底），都是真实项目对象
+// ---- 把 weekly_task 归一化成 { key, name, points, emoji, tid, task, category } ----
+// 来源：store.todayTasks（weekly_tasks 按 weekday 过滤，与 iPad /kid/today 同源）
 function normalizeGoal(p) {
   const name = (p.name || '').toString().trim()
-  // 固定分值优先；pointRange 项目（如 10-20 分）默认按最低分计
-  let points = Number(p.points) || 0
-  if (!points && Array.isArray(p.pointRange) && p.pointRange[1] > p.pointRange[0]) {
-    points = Number(p.pointRange[0]) || 10
-  }
-  if (!points) points = 10
+  const points = Number(p.points) || 1
   const emoji = p.emoji || p.icon || emojiForName(name)
-  const key = 'kid:proj:' + p.id
-  // pid 用真实项目 id：isDone / addCheckin 才能和 Checkin 页共用一套打卡记录
-  return { key, name, points, emoji, pid: p.id, category: p.category || '学习' }
+  const key = 'kid:task:' + p.id
+  // task 带原始行：打卡走 addTaskCheckin（与 iPad 同链路，写 daily_checkins+checkins）
+  return { key, name, points, emoji, tid: p.id, task: p, category: p.category || '学习' }
 }
 
 async function loadGoals() {
@@ -154,13 +149,9 @@ async function loadGoals() {
         // 静默：云不可达用本地数据
       }
     }
-    // 数据源：Pinia store（weeklyPlans ∩ projects 已算好"今日推荐"）
-    // 兜底1：家长没配周计划 → 展示系统里全部启用的真实项目（不再硬编码占位任务）
-    // 兜底2：系统没有项目 → 空列表，模板显示"今天没有任务"
-    let recs = [...store.todayRecommended]
-    if (!recs.length) {
-      recs = store.projects.filter((p) => p.isActive !== false)
-    }
+    // 数据源：store.todayTasks（weekly_tasks 按天过滤，与 iPad /kid/today 同源）
+    // 空 = 今天真没任务（种子导入在 store load 时已自动跑），模板显示"今天没有任务"
+    const recs = [...store.todayTasks]
     if (recs.length) {
       goals.value = recs.map(normalizeGoal)
       usingFallback.value = false
@@ -179,7 +170,8 @@ async function loadGoals() {
 
 // ---- 今天是否已打卡：同 project 已有 checkin，或同名任务今天已打 ----
 function isDone(goal) {
-  if (store.todayCheckedProjectIds.has(goal.pid)) return true
+  // 与 iPad 同源：daily_checkins 按 taskId 判重（旧打卡记录按名称兜底）
+  if (goal.tid != null && store.todayTaskDoneIds.has(goal.tid)) return true
   return store.checkins.some((c) => c.date === store.today && c.projectName === goal.name)
 }
 
@@ -214,13 +206,9 @@ async function onConfirm() {
   if (!goal) return
   submitting.value = true
   try {
-    // 复用 points store 的 addCheckin：本地 IndexedDB 先写，sync 会 push 云（断网也能打）
-    await store.addCheckin({
-      id: goal.pid,
-      name: goal.name,
-      category: goal.category || '学习',
-      _pickedPoints: goal.points
-    })
+    // 与 iPad /kid/today 同链路：daily_checkins（防重/连胜）+ checkins（积分）双写
+    const r = await store.addTaskCheckin(goal.task)
+    if (r === null) return // 已在另一端打过，不重复记账
     unlockAudio() // 首次手势解锁 AudioContext（安卓 Chrome 学习机必需）
     playCoin().catch(() => {}) // 防 unhandled rejection
     if (rect) {

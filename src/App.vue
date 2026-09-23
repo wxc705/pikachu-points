@@ -47,7 +47,6 @@ import {
   Clock,
   FileBarChart,
   Users,
-  CalendarDays,
   ListChecks,
   Settings as SettingsIcon
 } from 'lucide-vue-next'
@@ -59,7 +58,6 @@ const links = [
   { to: '/history', label: '历史', icon: Clock },
   { to: '/report', label: '报告', icon: FileBarChart },
   { to: '/parent', label: '家长', icon: Users },
-  { to: '/weekly-plan', label: '计划', icon: CalendarDays },
   { to: '/projects', label: '项目', icon: ListChecks },
   { to: '/settings', label: '设置', icon: SettingsIcon }
 ]
