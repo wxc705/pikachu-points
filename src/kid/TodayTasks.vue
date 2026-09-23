@@ -106,6 +106,7 @@
                 :style="entryStyle(i)"
               >
                 <div class="tt-task" :class="{ 'is-done': task.done }" @click="tapHomework(task)">
+                  <button class="tt-card-x" :aria-label="'删除 ' + task.name" @click.stop="askRemove(task, 'hw')">✕</button>
                   <div class="tt-task-emoji">{{ emojiForName(task.name) }}</div>
                   <div class="tt-task-info">
                     <div class="tt-task-name">{{ task.name }}</div>
@@ -158,6 +159,7 @@
                 :style="entryStyle(i)"
               >
                 <div class="tt-task" :class="cardClass(task)" @click="tapTask(task)">
+                  <button class="tt-card-x" :aria-label="'删除 ' + task.name" @click.stop="askRemove(task, 'task')">✕</button>
                   <div class="tt-task-emoji">{{ emojiForTask(task) }}</div>
                   <div class="tt-task-info">
                     <div class="tt-task-name">{{ task.name }}</div>
@@ -426,6 +428,19 @@
           <div class="tt-confirm-points" style="font-size:20px">+{{ tempTask.points }} 积分</div>
           <button class="tt-confirm-yes" :disabled="tempTask.busy || !tempTask.name.trim()" @click="confirmTempTask">✅ 加上并打卡</button>
           <button class="tt-confirm-no" @click="cancelTempTask">❌ 取消</button>
+        </div>
+      </div>
+
+      <!-- 临时删除：从今天去掉（打卡/积分回滚） -->
+      <div v-if="removeTarget" class="tt-confirm-overlay" @click.self="cancelRemove">
+        <div class="tt-confirm-card">
+          <div class="tt-confirm-emoji">🗑️</div>
+          <div class="tt-confirm-name">{{ removeTarget.task.name }}</div>
+          <div class="tt-confirm-points" style="font-size:15px">
+            从今天的进度里去掉{{ removeTarget.kind === 'hw' ? '，变身进度收回' : '，积分和进度都退回' }}
+          </div>
+          <button class="tt-confirm-yes" :disabled="removing" @click="confirmRemove">🗑 确定去掉</button>
+          <button class="tt-confirm-no" @click="cancelRemove">💚 先留着</button>
         </div>
       </div>
     </Teleport>
@@ -967,6 +982,40 @@ async function confirmTempTask() {
   }
 }
 
+// ---- 临时删除（从今天去掉，打卡/积分回滚） ----
+const removeTarget = ref(null) // { task, kind: 'hw'|'task' }
+const removing = ref(false)
+function askRemove(task, kind) {
+  removeTarget.value = { task, kind }
+  removing.value = false
+}
+function cancelRemove() {
+  if (!removing.value) removeTarget.value = null
+}
+async function confirmRemove() {
+  const target = removeTarget.value
+  if (!target || removing.value) return
+  removing.value = true
+  let ok = false
+  try {
+    ok = target.kind === 'hw'
+      ? await store.removeHomeworkToday(target.task)
+      : await store.removeTaskToday(target.task)
+  } catch (e) {
+    console.warn('[kid] remove failed:', e)
+  } finally {
+    removeTarget.value = null
+    removing.value = false
+  }
+  if (ok) {
+    unlockAudio()
+    bubbleText.value = '今天先跳过啦'
+    bubbleEmoji.value = '🧽'
+    bubbleTrigger.value++
+    checkAllDone()
+  }
+}
+
 async function onConfirm() {
   if (submitting.value) return
   const task = confirmTask.value
@@ -1193,6 +1242,10 @@ onBeforeUnmount(() => {
 .tt-pts-chips { display:flex; gap:8px; justify-content:center; margin-bottom:8px }
 .tt-pts-chip { padding:10px 18px; border-radius:999px; border:2px solid #e0e7ff; background:#fff; color:#6366f1; font-size:16px; font-weight:800; cursor:pointer; font-family:inherit }
 .tt-pts-chip.is-on { background:linear-gradient(135deg,#6366f1,#4f46e5); color:#fff; border-color:#4f46e5; box-shadow:0 4px 12px rgba(99,102,241,.3) }
+/* 临时删除（卡片左上角✕，避开右侧闯关按钮） */
+.tt-task { position:relative }
+.tt-card-x { position:absolute; top:5px; left:6px; width:24px; height:24px; border-radius:50%; border:1.5px solid #fecaca; background:rgba(254,226,226,.95); color:#ef4444; font-size:12px; font-weight:800; line-height:1; cursor:pointer; display:flex; align-items:center; justify-content:center; padding:0; z-index:2 }
+.tt-card-x:active { transform:scale(.9) }
 .tt-tabs { display:flex;background:rgba(255,255,255,.9);border-top:1px solid #e0e7ff;padding:8px 0;backdrop-filter:blur(8px) }
 .tt-tab { flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 4px;border:none;background:transparent;color:#94a3b8;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;transition:color .15s }
 .tt-tab.is-active { color:#4f46e5;font-weight:800 }

@@ -128,6 +128,7 @@ export async function push() {
      sort_order: t.sortOrder,
      is_active: t.isActive !== false,
      once: t.once || null,
+     skips: t.skips && t.skips.length ? t.skips : null,
      created_at: t.createdAt || null,
      updated_at: nowIso()
    }))
@@ -336,6 +337,7 @@ export async function pull() {
      sortOrder: t.sort_order,
      isActive: t.is_active !== false,
      once: t.once || null,
+     skips: Array.isArray(t.skips) ? t.skips : [],
      createdAt: t.created_at || 0
      }
    if (localTaskIds.has(t.id)) merged++

@@ -24,7 +24,10 @@ import {
   addDailyCheckin as dbAddDailyCheckin,
   getDailyHomeworkAll as dbGetAllDailyHomework,
   addDailyHomework as dbAddDailyHomework,
-  updateDailyHomework as dbUpdateDailyHomework
+  updateDailyHomework as dbUpdateDailyHomework,
+  deleteCheckin,
+  deleteDailyCheckin,
+  putCheckin
 } from '../services/db.js'
 import { DEFAULT_THEME_ID, getTheme } from '../themes/index.js'
 import { WEEKLY_TASKS_SEED } from '../services/weeklyTasksSeed.js'
@@ -414,7 +417,7 @@ export const usePointsStore = defineStore('points', () => {
  const todayTasks = computed(() => {
   const wd = dateToWeekday()
   return weeklyTasks.value
-   .filter((t) => t.weekday === wd && t.isActive !== false && (!t.once || t.once === today.value))
+   .filter((t) => t.weekday === wd && t.isActive !== false && (!t.once || t.once === today.value) && !(t.skips || []).includes(today.value))
    .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0) || (a.id || 0) - (b.id || 0))
  })
 
@@ -448,8 +451,8 @@ export const usePointsStore = defineStore('points', () => {
    completedAt: now,
    checkedBy: 'kid'
   }
-  await dbAddDailyCheckin(dailyEntry)
-  // 积分记账复用现有 checkins 表（totalPoints 自动累计）
+  dailyEntry.id = await dbAddDailyCheckin(dailyEntry)
+   // 积分记账复用现有 checkins 表（totalPoints 自动累计）
   const checkinEntry = {
    projectId: null,
    projectName: task.name,
@@ -460,7 +463,7 @@ export const usePointsStore = defineStore('points', () => {
    date: today.value,
    createdAt: now
   }
-  await dbAddCheckin(checkinEntry)
+  checkinEntry.id = await dbAddCheckin(checkinEntry)
   dailyCheckins.value = [...dailyCheckins.value, dailyEntry]
   checkins.value = [...checkins.value, checkinEntry]
   return { dailyEntry, checkinEntry }
@@ -512,7 +515,7 @@ export const usePointsStore = defineStore('points', () => {
     date: today.value,
     createdAt: Date.now()
    }
-   await dbAddCheckin(checkinEntry)
+   checkinEntry.id = await dbAddCheckin(checkinEntry)
    checkins.value = [...checkins.value, checkinEntry]
    return { homeworkEntry: entry, checkinEntry }
   }
@@ -602,6 +605,51 @@ export const usePointsStore = defineStore('points', () => {
     if (!stale.length) return
     for (const t of stale) await dbDeleteWeeklyTask(t.id)
     weeklyTasks.value = await dbGetAllWeeklyTasks()
+  }
+
+  // 临时删除（闯关任务）：从今天的进度里去掉——打卡回滚(daily_checkins+checkins)，
+  // 课表行保留在其它星期(记 skips)，只有当日一次性行(once)才真删
+  async function removeTaskToday(task) {
+    if (!task || !task.id) return false
+    const hitD = (d) => d.date === today.value && d.taskId === task.id
+    const hitC = (c) => c.date === today.value && c.taskId === task.id
+    for (const d of dailyCheckins.value.filter(hitD)) await deleteDailyCheckin(d.id)
+    for (const c of checkins.value.filter(hitC)) await deleteCheckin(c.id)
+    dailyCheckins.value = dailyCheckins.value.filter((d) => !hitD(d))
+    checkins.value = checkins.value.filter((c) => !hitC(c))
+    if (task.once === today.value) {
+      await dbDeleteWeeklyTask(task.id)
+      weeklyTasks.value = weeklyTasks.value.filter((t) => t.id !== task.id)
+    } else {
+      const skips = new Set(task.skips || [])
+      skips.add(today.value)
+      const patchRow = { skips: [...skips] }
+      const next = await dbUpdateWeeklyTask(task.id, patchRow)
+      weeklyTasks.value = weeklyTasks.value.map((t) => (t.id === task.id ? (next || { ...t, ...patchRow }) : t))
+    }
+    return true
+  }
+
+  // 临时删除（学校作业）：从今日记录移除 + 打卡回滚；后面项下标顺移保持记账对位
+  async function removeHomeworkToday(task) {
+    const entry = dailyHomework.value.find((h) => h.date === today.value)
+    if (!entry || !entry.tasks || !task) return false
+    const raw = String(task.id || task.key || '')
+    const idx = parseInt(raw.split(':')[2], 10)
+    if (isNaN(idx) || !entry.tasks[idx] || entry.tasks[idx].name !== task.name) return false
+    const hitC = (c) => c.date === today.value && c.homeworkId === entry.id && c.homeworkIndex === idx
+    for (const c of checkins.value.filter(hitC)) await deleteCheckin(c.id)
+    checkins.value = checkins.value.filter((c) => !hitC(c))
+    const tasks = entry.tasks.filter((_, i) => i !== idx)
+    const next = await dbUpdateDailyHomework(entry.id, { tasks })
+    dailyHomework.value = dailyHomework.value.map((h) => (h.id === entry.id ? (next || { ...entry, tasks }) : h))
+    const shifted = checkins.value.filter((c) => c.date === today.value && c.homeworkId === entry.id && c.homeworkIndex > idx)
+    for (const c of shifted) {
+      const updated = { ...c, homeworkIndex: c.homeworkIndex - 1 }
+      await putCheckin(updated)
+      checkins.value = checkins.value.map((x) => (x.id === c.id ? updated : x))
+    }
+    return true
   }
 
   // ----- v4: 成就系统 -----
@@ -778,6 +826,8 @@ export const usePointsStore = defineStore('points', () => {
  addTaskCheckin,
  addTempHomework,
  addTempTask,
+ removeTaskToday,
+ removeHomeworkToday,
  approvedRequests,
  totalEarned,
  totalSpent,

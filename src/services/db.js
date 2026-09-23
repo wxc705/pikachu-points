@@ -320,6 +320,16 @@ export async function updateDailyHomework(id, patch) {
   return next
 }
 
+export async function deleteCheckin(id) {
+ const db = await openDB()
+ return db.delete('checkins', id)
+}
+
+export async function deleteDailyCheckin(id) {
+ const db = await openDB()
+ return db.delete('daily_checkins', id)
+}
+
 export async function deleteDailyHomework(id) {
   const db = await openDB()
   await db.delete('daily_homework', id)
