@@ -38,6 +38,10 @@ pnpm-debug.log*
 # PWA
 dev-dist/
 
+# 本机同步服务器（方案D）
+server/data/
+server/dist-lan/
+
 # 测试文件（开发临时）
 public/test-*.html
 TASK-SYNC-FIX.md

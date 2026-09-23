@@ -3,7 +3,8 @@
 // 当前实现：Supabase（真云端，跨设备同步）
 // 未来：可以一行 import 切到 localStorage 模式（fallback）
 
-import { getAllCheckins, getAllRequests, getProjects, putCheckin, putProject, putExchangeRequest, getAllWeeklyTasks, putWeeklyTask, getAllDailyCheckins, putDailyCheckin, getDailyHomeworkAll, putDailyHomework } from './db.js'
+import { getAllCheckins, getAllRequests, getProjects, putCheckin, putProject, putExchangeRequest, getAllWeeklyTasks, putWeeklyTask, getAllDailyCheckins, putDailyCheckin, getDailyHomeworkAll, putDailyHomework, clearSyncDirty, setSyncDirtySuppressed } from './db.js'
+
 import { supabase, isSupabaseConfigured } from './supabase.js'
 
 // ---- 状态订阅 ----
@@ -61,6 +62,8 @@ export async function push() {
  // checkins
  if (checkins.length) {
    const rows = checkins.map((c) => ({
+     task_id: c.taskId || null,
+
      project_id: c.projectId,
      project_name: c.projectName,
      category: c.category,
@@ -177,6 +180,8 @@ export async function push() {
  const ts = nowIso()
  state.lastSyncedAt = ts
  state.lastResult = { pushed, pulled: 0, errors, lastSyncedAt: ts }
+ if (!errors.length) clearSyncDirty() // 全表成功才清脏标（部分失败留着下轮重试）
+
  // 部分表失败不 throw：返回完整结果（含 errors），UI 显示"部分推送 + 具体失败表"
  // 核心数据（打卡/兑换）已成功写入云端，不应被一张失败的表连坐
  state.lastError = errors.length ? errors.map((x) => `${x.table}: ${x.error}`).join(' | ') : null
@@ -202,6 +207,8 @@ export async function pull() {
  state.lastError = null
  notify()
  try {
+ setSyncDirtySuppressed(true) // pull 回写期间抑制脏标（finally 里解除）
+
  // 逐表拉取，表不存在/无权访问只记错误，不连坐其他表（核心打卡/兑换数据优先）
  const pullErrors = []
  const [cr, rr, pr, wt, dhr, dcr] = await Promise.allSettled([
@@ -235,6 +242,12 @@ export async function pull() {
 
  // ---- checkins 合并 ----
  const localCheckinMap = new Map(localCheckins.map((c) => [c.id, c]))
+ const checkinSig = (r) => JSON.stringify([r.date, r.projectId, r.projectName, r.category, r.pointsEarned, r.note, r.checkedBy, r.createdAt, r.taskId])
+
+ const checkinSigs = new Set(localCheckins.map(checkinSig))
+
+ const taskDayKeys = new Set(localCheckins.filter((x) => x.taskId).map((x) => x.date + '|' + x.taskId))
+
  for (const c of (cloudCheckins || [])) {
  const row = {
    id: c.id,
@@ -245,11 +258,23 @@ export async function pull() {
    note: c.note,
    checkedBy: c.checked_by,
    date: c.date,
-   createdAt: c.created_at
+   createdAt: c.created_at,
+   taskId: c.task_id || null,
+
  }
+ const sig = checkinSig(row)
+
+ if (checkinSigs.has(sig)) continue // 跨设备同内容副本(撞id重分配等) → 签名去重防双记
+
+ if (row.taskId && taskDayKeys.has(row.date + '|' + row.taskId)) continue // 同日同任务已在本地 → 防双记
+
  const existing = localCheckinMap.get(c.id)
  if (!existing) {
  await putCheckin(row)
+ checkinSigs.add(sig)
+
+ if (row.taskId) taskDayKeys.add(row.date + '|' + row.taskId)
+
  pulled++
  } else {
  // 都有 → 哪个 createdAt 较新（fallback 到 id 大小）
@@ -257,6 +282,10 @@ export async function pull() {
  const cTs = row.createdAt || row.id || 0
  if (cTs > eTs) {
  await putCheckin(row)
+ checkinSigs.add(sig)
+
+ if (row.taskId) taskDayKeys.add(row.date + '|' + row.taskId)
+
  merged++
  }
  // 否则保留本地
@@ -326,6 +355,10 @@ export async function pull() {
  // 已知限制：删除不同步、无 LWW —— 待后端方案落地后细化（见 TODO-supabase-sync.md）
  const localWeeklyTasks = await getAllWeeklyTasks()
  const localTaskIds = new Set(localWeeklyTasks.map((t) => t.id))
+ const localTaskMap = new Map(localWeeklyTasks.map((t) => [t.id, t]))
+
+ const wtEq = (a, b) => a.weekday === b.weekday && a.timeSlot === b.timeSlot && a.name === b.name && a.points === b.points && a.category === b.category && a.sortOrder === b.sortOrder && !!a.isActive === !!b.isActive && (a.once || null) === (b.once || null) && JSON.stringify(a.skips || []) === JSON.stringify(b.skips || [])
+
  for (const t of (cloudWeeklyTasks || [])) {
    const row = {
      id: t.id,
@@ -340,17 +373,24 @@ export async function pull() {
      skips: Array.isArray(t.skips) ? t.skips : [],
      createdAt: t.created_at || 0
      }
-   if (localTaskIds.has(t.id)) merged++
-   else pulled++
+   const prevT = localTaskMap.get(t.id)
+
+   if (prevT) { if (wtEq(prevT, row)) continue; merged++ } else pulled++ // 等值跳过：防每30s无谓回写(回写会误标脏)
+
    await putWeeklyTask(row)
+
  }
 
  // ---- daily_checkins 合并 (v4.1) ----
  // append-only 流水：按 id 并集，两台设备的打卡都保留，不覆盖不删
  const localDaily = await getAllDailyCheckins()
  const localDailyIds = new Set(localDaily.map((d) => d.id))
+ const localDailyTaskKeys = new Set(localDaily.map((x) => x.date + '|' + x.task_id))
+
  for (const d of (cloudDailyCheckins || [])) {
    if (localDailyIds.has(d.id)) continue
+   if (localDailyTaskKeys.has(d.date + '|' + d.task_id)) continue // 同日同任务已在本地(异id) → 防双记
+
    await putDailyCheckin({
      id: d.id,
      date: d.date,
@@ -361,6 +401,8 @@ export async function pull() {
      completedAt: d.completed_at || 0,
      checkedBy: d.checked_by || 'kid'
    })
+   localDailyTaskKeys.add(d.date + '|' + d.task_id)
+
    pulled++
  }
 
@@ -401,6 +443,8 @@ export async function pull() {
  state.lastResult = { pushed: 0, pulled: 0, merged: 0, error: state.lastError }
  throw e
 } finally {
+ setSyncDirtySuppressed(false)
+
  state.isSyncing = false
  notify()
 }

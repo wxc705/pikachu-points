@@ -27,7 +27,10 @@ import {
   updateDailyHomework as dbUpdateDailyHomework,
   deleteCheckin,
   deleteDailyCheckin,
-  putCheckin
+  putCheckin,
+
+  isSyncDirty
+
 } from '../services/db.js'
 import { DEFAULT_THEME_ID, getTheme } from '../themes/index.js'
 import { WEEKLY_TASKS_SEED } from '../services/weeklyTasksSeed.js'
@@ -779,15 +782,50 @@ export const usePointsStore = defineStore('points', () => {
  }, 60_000)
  onScopeDispose(() => clearInterval(_midnightTimer))
 
- // 自动拉取：每 30s 从云拉取一次（Supabase 配好后才生效）
+ // 自动同步（方案D）：每 30s 先推后拉；离页/联网立刻冲刷脏数据
+
+ const _flushPush = async () => {
+
+   if (!isSyncDirty() || isSyncing.value) return
+
+   try { await syncPush() } catch (e) { /* 静默：未配置/断网 → 脏标留下轮重试 */ }
+
+ }
+
  const _pullTimer = setInterval(async () => {
- if (isSyncing.value) return // 正在同步中，跳过
- try {
- const r = await syncPull()
- if (r.pulled > 0) await load(true) // 有新数据则刷新 store
- } catch (e) { /* 静默：未配 Supabase 时 pull 会抛错，忽略 */ }
+
+   if (isSyncing.value) return // 正在同步中，跳过
+
+   try {
+
+     await _flushPush() // 先推后拉：防 weekly_tasks 云端覆盖吞掉未推的本地编辑（pull 已加等值跳过，双保险）
+
+     const r = await syncPull()
+
+     if (r.pulled > 0 || r.merged > 0) await load(true) // 有新数据则刷新 store
+
+   } catch (e) { /* 静默：未配 Supabase 时 pull 会抛错， ignore */ }
+
  }, 30_000)
- onScopeDispose(() => clearInterval(_pullTimer))
+
+ const _onHidden = () => { if (document.visibilityState === 'hidden') _flushPush() }
+
+ const _onOnline = () => _flushPush()
+
+ document.addEventListener('visibilitychange', _onHidden)
+
+ window.addEventListener('online', _onOnline)
+
+ onScopeDispose(() => {
+
+   clearInterval(_pullTimer)
+
+   document.removeEventListener('visibilitychange', _onHidden)
+
+   window.removeEventListener('online', _onOnline)
+
+ })
+
 
  async function syncPushToCloud() {
  try {

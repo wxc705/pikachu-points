@@ -2,6 +2,22 @@ import { openDB as idbOpen } from 'idb'
 
 export const DB_NAME = 'pikachu-points'
 export const DB_VERSION = 4
+// ==== 同步脏标（方案D 自动推送）：本地写库 → 标脏 → 30s定时/离页/联网冲刷上云 ====
+const SYNC_DIRTY_KEY = 'pikachu-points:sync-dirty'
+let _syncDirtySuppressed = false
+// pull 合并回写是“来自云端的写”，pull 期间抑制标脏，防 30s 推拉死循环
+export function setSyncDirtySuppressed(v) { _syncDirtySuppressed = v }
+export function markSyncDirty() {
+ if (_syncDirtySuppressed) return
+ try { localStorage.setItem(SYNC_DIRTY_KEY, '1') } catch (_) {}
+}
+export function isSyncDirty() {
+ try { return localStorage.getItem(SYNC_DIRTY_KEY) === '1' } catch (_) { return false }
+}
+export function clearSyncDirty() {
+ try { localStorage.removeItem(SYNC_DIRTY_KEY) } catch (_) {}
+}
+
 
 let _dbPromise = null
 
@@ -70,11 +86,13 @@ export async function openDB() {
 
 // ----- projects -----
 export async function addProject(project) {
+ markSyncDirty()
  const db = await openDB()
  return db.add('projects', { ...project, updatedAt: Date.now() })
 }
 
 export async function updateProject(id, patch) {
+ markSyncDirty()
  const db = await openDB()
  const tx = db.transaction('projects', 'readwrite')
  const store = tx.objectStore('projects')
@@ -94,6 +112,7 @@ export async function setProjectActive(id, isActive) {
 }
 
 export async function deleteProject(id) {
+ markSyncDirty()
  const db = await openDB()
  await db.delete('projects', id)
 }
@@ -111,6 +130,7 @@ export async function getActiveProjects() {
 
 // ----- checkins -----
 export async function addCheckin(checkin) {
+ markSyncDirty()
  const db = await openDB()
  return db.add('checkins', checkin)
 }
@@ -144,11 +164,13 @@ export function getWeekRange(todayStr) {
 
 // ----- exchange_requests -----
 export async function addExchangeRequest(req) {
+ markSyncDirty()
  const db = await openDB()
  return db.add('exchange_requests', req)
 }
 
 export async function updateExchangeRequest(id, patch) {
+ markSyncDirty()
  const db = await openDB()
  const tx = db.transaction('exchange_requests', 'readwrite')
  const store = tx.objectStore('exchange_requests')
@@ -176,6 +198,7 @@ export async function getAllRequests() {
 
 // ----- 同步辅助：清空全部 + 覆盖写入 -----
 export async function clearAll() {
+ markSyncDirty()
  const db = await openDB()
  const tx = db.transaction(['projects', 'checkins', 'exchange_requests'], 'readwrite')
  await tx.objectStore('projects').clear()
@@ -185,16 +208,19 @@ export async function clearAll() {
 }
 
 export async function putCheckin(checkin) {
+ markSyncDirty()
  const db = await openDB()
  return db.put('checkins', checkin)
 }
 
 export async function putProject(project) {
+ markSyncDirty()
  const db = await openDB()
  return db.put('projects', project)
 }
 
 export async function putExchangeRequest(req) {
+ markSyncDirty()
  const db = await openDB()
  return db.put('exchange_requests', req)
 }
@@ -212,11 +238,13 @@ export async function getWeeklyPlan(weekday) {
 }
 
 export async function setWeeklyPlan(weekday, projectIds) {
+ markSyncDirty()
  const db = await openDB()
  return db.put('weekly_plan', { weekday, projectIds: [...new Set(projectIds)] })
 }
 
 export async function clearWeeklyPlan(weekday) {
+ markSyncDirty()
  const db = await openDB()
  return db.delete('weekly_plan', weekday)
 }
@@ -234,16 +262,19 @@ export async function getWeeklyTasksByWeekday(weekday) {
 }
 
 export async function addWeeklyTask(task) {
+ markSyncDirty()
  const db = await openDB()
  return db.add('weekly_tasks', { ...task, isActive: task.isActive !== false })
 }
 
 export async function putWeeklyTask(task) {
+ markSyncDirty()
  const db = await openDB()
  return db.put('weekly_tasks', task)
 }
 
 export async function updateWeeklyTask(id, patch) {
+ markSyncDirty()
  const db = await openDB()
  const tx = db.transaction('weekly_tasks', 'readwrite')
  const store = tx.objectStore('weekly_tasks')
@@ -259,12 +290,14 @@ export async function updateWeeklyTask(id, patch) {
 }
 
 export async function deleteWeeklyTask(id) {
+ markSyncDirty()
  const db = await openDB()
  await db.delete('weekly_tasks', id)
 }
 
 // ----- daily_checkins (v3): 任务打卡记录（date+taskId 去重防重复打卡） -----
 export async function addDailyCheckin(entry) {
+ markSyncDirty()
  const db = await openDB()
  return db.add('daily_checkins', entry)
 }
@@ -281,6 +314,7 @@ export async function getAllDailyCheckins() {
 
 // 云同步 pull 用：带显式 id 覆盖写（本地 add 是自增）
 export async function putDailyCheckin(entry) {
+  markSyncDirty()
   const db = await openDB()
   return db.put('daily_checkins', entry)
 }
@@ -288,6 +322,7 @@ export async function putDailyCheckin(entry) {
 // ----- daily_homework (v4): 每日学校作业 -----
 // homework: { date, tasks: [{ name, points, done }], source, createdAt }
 export async function addDailyHomework(homework) {
+  markSyncDirty()
   const db = await openDB()
   return db.add('daily_homework', { ...homework, createdAt: Date.now() })
 }
@@ -303,6 +338,7 @@ export async function getDailyHomeworkAll() {
 }
 
 export async function updateDailyHomework(id, patch) {
+  markSyncDirty()
   const db = await openDB()
   const tx = db.transaction('daily_homework', 'readwrite')
   const store = tx.objectStore('daily_homework')
@@ -321,21 +357,25 @@ export async function updateDailyHomework(id, patch) {
 }
 
 export async function deleteCheckin(id) {
+ markSyncDirty()
  const db = await openDB()
  return db.delete('checkins', id)
 }
 
 export async function deleteDailyCheckin(id) {
+ markSyncDirty()
  const db = await openDB()
  return db.delete('daily_checkins', id)
 }
 
 export async function deleteDailyHomework(id) {
+  markSyncDirty()
   const db = await openDB()
   await db.delete('daily_homework', id)
 }
 
 export async function putDailyHomework(homework) {
+  markSyncDirty()
   const db = await openDB()
   return db.put('daily_homework', homework)
 }
