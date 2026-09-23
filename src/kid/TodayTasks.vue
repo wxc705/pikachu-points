@@ -132,6 +132,7 @@
                 {{ emojiForName(t.name) }}
               </div>
             </div>
+            <button class="tt-temp-add" @click="openTempHw">➕ 临时补录作业</button>
           </div>
 
           <!-- 右栏：自我拓展 -->
@@ -193,6 +194,7 @@
                 {{ emojiForTask(t) }}
               </div>
             </div>
+            <button class="tt-temp-add" @click="openTempTask">➕ 临时补录闯关</button>
           </div>
         </div>
 
@@ -393,6 +395,39 @@
           </div>
         </div>
       </Transition>
+
+      <!-- 临时补录：学校作业（+变身进度） -->
+      <div v-if="tempHw.show" class="tt-confirm-overlay" @click.self="cancelTempHw">
+        <div class="tt-confirm-card">
+          <div class="tt-confirm-emoji">📝</div>
+          <div class="tt-confirm-name">临时补录作业</div>
+          <input v-model="tempHw.name" class="tt-temp-input" maxlength="20" placeholder="做了什么作业？" @keyup.enter="confirmTempHw" />
+          <div class="tt-confirm-points" style="font-size:18px">+1 变身进度</div>
+          <button class="tt-confirm-yes" :disabled="tempHw.busy || !tempHw.name.trim()" @click="confirmTempHw">✅ 加上并打卡</button>
+          <button class="tt-confirm-no" @click="cancelTempHw">❌ 取消</button>
+        </div>
+      </div>
+
+      <!-- 临时补录：自我拓展（进度 + 自选积分） -->
+      <div v-if="tempTask.show" class="tt-confirm-overlay" @click.self="cancelTempTask">
+        <div class="tt-confirm-card">
+          <div class="tt-confirm-emoji">🌟</div>
+          <div class="tt-confirm-name">临时补录闯关</div>
+          <input v-model="tempTask.name" class="tt-temp-input" maxlength="20" placeholder="做了什么挑战？" @keyup.enter="confirmTempTask" />
+          <div class="tt-pts-chips">
+            <button
+              v-for="p in TEMP_POINTS"
+              :key="p"
+              class="tt-pts-chip"
+              :class="{ 'is-on': tempTask.points === p }"
+              @click="tempTask.points = p"
+            >{{ p }} 分</button>
+          </div>
+          <div class="tt-confirm-points" style="font-size:20px">+{{ tempTask.points }} 积分</div>
+          <button class="tt-confirm-yes" :disabled="tempTask.busy || !tempTask.name.trim()" @click="confirmTempTask">✅ 加上并打卡</button>
+          <button class="tt-confirm-no" @click="cancelTempTask">❌ 取消</button>
+        </div>
+      </div>
     </Teleport>
 
     <!-- TODO: QC提供变身GIF后替换此占位 -->
@@ -867,6 +902,71 @@ async function tapHomework(task) {
   }
 }
 
+// ---- 临时补录（儿童端自助补录当天未提前录入的内容） ----
+const tempHw = ref({ show: false, name: '', busy: false })
+function openTempHw() {
+  tempHw.value = { show: true, name: '', busy: false }
+}
+function cancelTempHw() {
+  if (!tempHw.value.busy) tempHw.value.show = false
+}
+async function confirmTempHw() {
+  const name = (tempHw.value.name || '').trim()
+  if (!name || tempHw.value.busy) return
+  tempHw.value.busy = true
+  try {
+    const res = await store.addTempHomework(name)
+    if (res) {
+      tempHw.value.show = false
+      unlockAudio()
+      playCoin().catch(() => {})
+      warmUpVoice()
+      const msg = speakEncouragement()
+      bubbleText.value = msg
+      bubbleEmoji.value = '⭐'
+      bubbleTrigger.value++
+      checkAllDone()
+    }
+  } catch (e) {
+    console.warn('[kid] temp homework failed:', e)
+  } finally {
+    tempHw.value.busy = false
+  }
+}
+
+const TEMP_POINTS = [1, 2, 3, 5]
+const tempTask = ref({ show: false, name: '', points: 1, busy: false })
+function openTempTask() {
+  tempTask.value = { show: true, name: '', points: 1, busy: false }
+}
+function cancelTempTask() {
+  if (!tempTask.value.busy) tempTask.value.show = false
+}
+async function confirmTempTask() {
+  const name = (tempTask.value.name || '').trim()
+  if (!name || tempTask.value.busy) return
+  tempTask.value.busy = true
+  try {
+    const res = await store.addTempTask(name, tempTask.value.points)
+    if (res) {
+      tempTask.value.show = false
+      unlockAudio()
+      playCoin().catch(() => {})
+      floating.value = { taskId: res.dailyEntry.taskId, points: tempTask.value.points, nonce: Date.now() }
+      warmUpVoice()
+      const msg = speakEncouragement()
+      bubbleText.value = msg
+      bubbleEmoji.value = '🎉'
+      bubbleTrigger.value++
+      checkAllDone()
+    }
+  } catch (e) {
+    console.warn('[kid] temp task failed:', e)
+  } finally {
+    tempTask.value.busy = false
+  }
+}
+
 async function onConfirm() {
   if (submitting.value) return
   const task = confirmTask.value
@@ -1085,6 +1185,14 @@ onBeforeUnmount(() => {
 .tt-confirm-yes { background:linear-gradient(135deg,#6366f1,#4f46e5);color:#fff;box-shadow:0 4px 12px rgba(99,102,241,.3) }
 .tt-confirm-no { background:rgba(241,245,249,.8);color:#64748b }
 .tt-confirm-yes:disabled { opacity:.5 }
+/* 临时补录按钮/输入/积分档位 */
+.tt-temp-add { display:block; width:100%; margin-top:10px; padding:12px; border:2px dashed #c7d2fe; border-radius:16px; background:rgba(238,242,255,.5); color:#6366f1; font-size:15px; font-weight:800; cursor:pointer; font-family:inherit }
+.tt-temp-add:active { transform:scale(.97) }
+.tt-temp-input { display:block; width:100%; box-sizing:border-box; padding:14px; margin-bottom:12px; border:2px solid #e0e7ff; border-radius:16px; font-size:18px; font-weight:700; text-align:center; font-family:inherit; outline:none; background:#fff; color:#1a1a2e }
+.tt-temp-input:focus { border-color:#818cf8 }
+.tt-pts-chips { display:flex; gap:8px; justify-content:center; margin-bottom:8px }
+.tt-pts-chip { padding:10px 18px; border-radius:999px; border:2px solid #e0e7ff; background:#fff; color:#6366f1; font-size:16px; font-weight:800; cursor:pointer; font-family:inherit }
+.tt-pts-chip.is-on { background:linear-gradient(135deg,#6366f1,#4f46e5); color:#fff; border-color:#4f46e5; box-shadow:0 4px 12px rgba(99,102,241,.3) }
 .tt-tabs { display:flex;background:rgba(255,255,255,.9);border-top:1px solid #e0e7ff;padding:8px 0;backdrop-filter:blur(8px) }
 .tt-tab { flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 4px;border:none;background:transparent;color:#94a3b8;font-size:12px;font-weight:600;cursor:pointer;font-family:inherit;transition:color .15s }
 .tt-tab.is-active { color:#4f46e5;font-weight:800 }

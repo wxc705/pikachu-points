@@ -127,6 +127,7 @@ export async function push() {
      category: t.category,
      sort_order: t.sortOrder,
      is_active: t.isActive !== false,
+     once: t.once || null,
      created_at: t.createdAt || null,
      updated_at: nowIso()
    }))
@@ -334,8 +335,9 @@ export async function pull() {
      category: t.category,
      sortOrder: t.sort_order,
      isActive: t.is_active !== false,
+     once: t.once || null,
      createdAt: t.created_at || 0
-   }
+     }
    if (localTaskIds.has(t.id)) merged++
    else pulled++
    await putWeeklyTask(row)

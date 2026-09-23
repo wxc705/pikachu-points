@@ -183,6 +183,8 @@ export const usePointsStore = defineStore('points', () => {
  await seedWeeklyTasksIfEmpty()
  // 已有课表的设备：修正种子初版的时段错误（幂等）
  await migrateSeedFixes()
+ // 清理过期的一次性临时补录行
+ await cleanupExpiredTempTasks()
 }
 
  async function refresh() {
@@ -412,7 +414,7 @@ export const usePointsStore = defineStore('points', () => {
  const todayTasks = computed(() => {
   const wd = dateToWeekday()
   return weeklyTasks.value
-   .filter((t) => t.weekday === wd && t.isActive !== false)
+   .filter((t) => t.weekday === wd && t.isActive !== false && (!t.once || t.once === today.value))
    .sort((a, b) => (a.sortOrder || 0) - (b.sortOrder || 0) || (a.id || 0) - (b.id || 0))
  })
 
@@ -546,6 +548,60 @@ export const usePointsStore = defineStore('points', () => {
     dailyHomework.value = [...dailyHomework.value, stored]
     return stored
    }
+  }
+
+  // ----- 儿童端临时补录（当日自助补录未提前录入的内容） -----
+
+  // 补录学校作业：追加进今日 daily_homework 并立即打卡（+变身进度，与家长录入同链路）
+  async function addTempHomework(name) {
+    const clean = (name || '').trim()
+    if (!clean) return null
+    const existing = dailyHomework.value.find((h) => h.date === today.value)
+    let entry
+    if (existing) {
+      const tasks = [...(existing.tasks || []), { name: clean, points: 1, done: false }]
+      entry = await dbUpdateDailyHomework(existing.id, { tasks })
+      if (!entry) entry = { ...existing, tasks }
+      dailyHomework.value = dailyHomework.value.map((h) => (h.id === existing.id ? entry : h))
+    } else {
+      const payload = { date: today.value, tasks: [{ name: clean, points: 1, done: false }], source: '儿童端临时补录' }
+      const id = await dbAddDailyHomework(payload)
+      entry = { ...payload, id }
+      dailyHomework.value = [...dailyHomework.value, entry]
+    }
+    const idx = entry.tasks.length - 1
+    return addHomeworkCheckin({ id: `homework:${today.value}:${idx}`, name: clean, points: 1, done: false })
+  }
+
+  // 补录闯关任务：建当日一次性行（weekly_tasks.once=今天，timeSlot='临时'不进时间线）并立即打卡
+  // 进度（daily_checkins/连胜/今日进度条）+ 自选积分（checkins）一次记账
+  async function addTempTask(name, points) {
+    const clean = (name || '').trim()
+    if (!clean) return null
+    const p = Math.max(1, Math.min(10, Number(points) || 1))
+    const row = {
+      weekday: dateToWeekday(),
+      timeSlot: '临时',
+      name: clean,
+      points: p,
+      category: '闯关',
+      sortOrder: 999,
+      isActive: true,
+      once: today.value,
+      createdAt: Date.now()
+    }
+    const id = await dbAddWeeklyTask({ ...row })
+    const task = { ...row, id }
+    weeklyTasks.value = [...weeklyTasks.value, task]
+    return addTaskCheckin(task)
+  }
+
+  // 清理过期的一次性补录行（once < 今天），防止库膨胀
+  async function cleanupExpiredTempTasks() {
+    const stale = weeklyTasks.value.filter((t) => t.once && t.once < today.value)
+    if (!stale.length) return
+    for (const t of stale) await dbDeleteWeeklyTask(t.id)
+    weeklyTasks.value = await dbGetAllWeeklyTasks()
   }
 
   // ----- v4: 成就系统 -----
@@ -720,6 +776,8 @@ export const usePointsStore = defineStore('points', () => {
  updateWeeklyTaskItem,
  deleteWeeklyTaskItem,
  addTaskCheckin,
+ addTempHomework,
+ addTempTask,
  approvedRequests,
  totalEarned,
  totalSpent,
