@@ -1257,7 +1257,7 @@ onBeforeUnmount(() => {
 .tt-card-x { position:absolute; top:5px; left:6px; width:24px; height:24px; border-radius:50%; border:1.5px solid #fecaca; background:rgba(254,226,226,.95); color:#ef4444; font-size:12px; font-weight:800; line-height:1; cursor:pointer; display:flex; align-items:center; justify-content:center; padding:0; z-index:2 }
 .tt-card-x:active { transform:scale(.9) }
 /* 角色壁纸（三件套）：半透明垫底，主内容 z-index 压上去 */
-.tt-wall { position:fixed; inset:0; z-index:0; background-position:center; background-size:cover; background-repeat:no-repeat; opacity:.14; pointer-events:none }
+.tt-wall { position:fixed; inset:0; z-index:0; background-position:center; background-size:cover; background-repeat:no-repeat; opacity:.24; pointer-events:none }
 .tt-main-area { position:relative; z-index:1 }
 /* 变身 GIF（横版素材，深底卡片居中） */
 .tt-morph-gif { display:block; width:min(72vw,540px); max-height:52vh; border-radius:20px; background:#0a0a1a; margin:0 auto 12px }
