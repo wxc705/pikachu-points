@@ -117,8 +117,11 @@ export const usePointsStore = defineStore('points', () => {
  return m
  })
 
+ // 学校作业不计入积分（只算变身进度）——QC 2026-09-23 拍板修正既定规则的落地漏洞
  const totalEarned = computed(() =>
- checkins.value.reduce((s, c) => s + (c.pointsEarned ||0),0)
+  checkins.value
+   .filter((c) => c.category !== '学校')
+   .reduce((s, c) => s + (c.pointsEarned || 0), 0)
  )
 
  const totalSpent = computed(() =>
@@ -228,19 +231,37 @@ export const usePointsStore = defineStore('points', () => {
 
  // 拨付积分（家长手动加减分，独立 category='拨付'）
  async function addGrantPoints(points, reason = '') {
- const entry = {
- projectId: null,
- projectName: reason.trim() || '家长拨付',
- category: '拨付',
- pointsEarned: points, // 可正可负
- note: '',
- checkedBy: 'parent',
- date: today.value,
- createdAt: Date.now()
+  const entry = {
+   projectId: null,
+   projectName: reason.trim() || '家长拨付',
+   category: '拨付',
+   pointsEarned: points, // 可正可负（历史入口；正分现在走确认拨付，扣分走 addPenaltyPoints）
+   note: '',
+   checkedBy: 'parent',
+   date: today.value,
+   createdAt: Date.now()
+  }
+  await dbAddCheckin(entry)
+  checkins.value = [...checkins.value, entry]
+  return entry
  }
- await dbAddCheckin(entry)
- checkins.value = [...checkins.value, entry]
- return entry
+
+ // 罚分（家长扣分，category='罚分'，记负数；基地打卡记录里 🔻 红字显示）
+ async function addPenaltyPoints(points, reason = '') {
+  const n = Math.max(1, Math.round(Math.abs(Number(points) || 0)))
+  const entry = {
+   projectId: null,
+   projectName: '罚分·' + (reason.trim() || '日常'),
+   category: '罚分',
+   pointsEarned: -n,
+   note: '',
+   checkedBy: 'parent',
+   date: today.value,
+   createdAt: Date.now()
+  }
+  await dbAddCheckin(entry)
+  checkins.value = [...checkins.value, entry]
+  return entry
  }
 
  async function addRequest(reward, pointsCost, note = '') {
@@ -845,6 +866,7 @@ export const usePointsStore = defineStore('points', () => {
  addCheckin,
  addRatingCheckin,
  addGrantPoints,
+ addPenaltyPoints,
  addRequest,
  updateRequest,
  addProjectItem,

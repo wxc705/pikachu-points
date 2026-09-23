@@ -123,16 +123,15 @@
       <ul class="space-y-1.5 text-sm">
         <li v-for="c in todayCheckins" :key="c.id" class="flex items-center justify-between py-1">
           <span class="text-ink-soft">{{ c.projectName }}</span>
-          <span class="text-secondary font-bold">+{{ c.pointsEarned }}</span>
+          <span class="font-bold" :class="c.pointsEarned < 0 ? 'text-red-500' : 'text-secondary'"><template v-if="c.category === '学校'">+{{ c.pointsEarned }} 变身进度</template><template v-else>{{ c.pointsEarned > 0 ? '+' : '' }}{{ c.pointsEarned }}</template></span>
         </li>
       </ul>
     </section>
 
-    <!-- 拨付积分 -->
+    <!-- 拨付积分（只加正分；扣分走下面的罚分） -->
     <section class="rounded-2xl bg-surface shadow-sm p-4 space-y-3">
       <h2 class="font-bold text-sm">💰 拨付积分</h2>
       <div class="flex items-center gap-2">
-        <button @click="grantDelta(-10)" :disabled="store.isSyncing" class="w-10 h-10 rounded-full bg-red-100 text-red-500 font-bold hover:bg-red-200 disabled:opacity-30 transition-colors btn-press">-10</button>
         <input v-model.number="grantAmount" type="number" placeholder="输入分数" class="flex-1 rounded-xl bg-primary-soft/50 px-4 py-2.5 text-sm font-semibold text-center focus:outline-none focus:ring-2 focus:ring-primary transition-all" />
         <button @click="grantDelta(10)" :disabled="store.isSyncing" class="w-10 h-10 rounded-full bg-green-100 text-green-600 font-bold hover:bg-green-200 disabled:opacity-30 transition-colors btn-press">+10</button>
       </div>
@@ -144,6 +143,24 @@
         ✨ 确认拨付
       </button>
       <p v-if="grantError" class="text-xs text-red-500 text-center font-medium">{{ grantError }}</p>
+    </section>
+
+    <!-- 罚分积分（记负数，基地打卡记录 🔻 可见） -->
+    <section class="rounded-2xl bg-surface shadow-sm p-4 space-y-3">
+      <h2 class="font-bold text-sm">🔻 罚分积分</h2>
+      <div class="flex items-center gap-2">
+        <input v-model.number="fineAmount" type="number" min="1" placeholder="输入罚分数" class="flex-1 rounded-xl bg-red-50 px-4 py-2.5 text-sm font-semibold text-center focus:outline-none focus:ring-2 focus:ring-red-300 transition-all" />
+        <button @click="fineDelta(-1)" :disabled="store.isSyncing" class="w-10 h-10 rounded-full bg-red-100 text-red-500 font-bold hover:bg-red-200 disabled:opacity-30 transition-colors btn-press">-1</button>
+        <button @click="fineDelta(1)" :disabled="store.isSyncing" class="w-10 h-10 rounded-full bg-red-100 text-red-500 font-bold hover:bg-red-200 disabled:opacity-30 transition-colors btn-press">+1</button>
+      </div>
+      <div class="grid grid-cols-4 gap-2">
+        <button v-for="n in [1, 2, 5, 10]" :key="n" @click="fineAmount = n" class="rounded-lg bg-red-50 text-red-500 text-xs font-semibold py-2 hover:bg-red-100 transition-colors btn-press">{{ n }}分</button>
+      </div>
+      <input v-model="fineReason" placeholder="原因（如：吵闹、乱丢玩具）" class="w-full rounded-xl bg-red-50 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-red-300 transition-all" />
+      <button @click="onFine" :disabled="!fineAmount || store.isSyncing" class="w-full py-3 rounded-xl bg-red-500 text-white font-bold hover:opacity-90 disabled:opacity-40 transition-all btn-press">
+        🔻 确认罚分
+      </button>
+      <p v-if="fineError" class="text-xs text-red-500 text-center font-medium">{{ fineError }}</p>
     </section>
 
   </div>
@@ -225,12 +242,32 @@ async function onGrant() {
   grantError.value = ''
   const pts = Number(grantAmount.value)
   if (!pts || isNaN(pts)) { playError(); grantError.value = '请输入分数'; return }
-  if (pts < 0 && store.totalPoints + pts < 0) { playError(); grantError.value = '积分不够扣'; return }
+  if (pts <= 0) { playError(); grantError.value = '拨付请输入正分数（扣分请用罚分）'; return }
   try {
     await store.addGrantPoints(pts, grantReason.value)
-    pts > 0 ? playCoin() : playError()
+    playCoin()
     grantAmount.value = null; grantReason.value = ''
   } catch (e) { playError(); grantError.value = '拨付失败' }
+}
+
+// 罚分：记负数，category='罚分'，基地打卡记录可见
+const fineAmount = ref(null)
+const fineReason = ref('')
+const fineError = ref('')
+function fineDelta(n) {
+  const cur = Number(fineAmount.value) || 0
+  fineAmount.value = Math.max(1, cur + n)
+}
+async function onFine() {
+  fineError.value = ''
+  const n = Math.abs(Number(fineAmount.value))
+  if (!n || isNaN(n)) { playError(); fineError.value = '请输入罚分数'; return }
+  if (store.totalPoints < n) { playError(); fineError.value = '积分不够扣'; return }
+  try {
+    await store.addPenaltyPoints(n, fineReason.value)
+    playError() // 扣分音效提示
+    fineAmount.value = null; fineReason.value = ''
+  } catch (e) { playError(); fineError.value = '罚分失败' }
 }
 
 // v4: 解析作业文本 → 任务列表

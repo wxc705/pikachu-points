@@ -38,7 +38,7 @@
       <HeroSection
         :date="store.today"
         :total-points="store.totalPoints"
-        :today-earned="store.todayTaskEarned + store.todayHomeworkEarned"
+        :today-earned="store.todayTaskEarned"
         :streak="store.currentStreak"
         :level="ultramanLevel"
         :level-label="levelLabel"
@@ -72,7 +72,7 @@
       <SpeechBubble :text="bubbleText" :emoji="bubbleEmoji" :trigger="bubbleTrigger" />
 
       <!-- 全勤庆祝（v4） -->
-      <AllDoneEffect :show="showAllDone" :total-earned="store.todayTaskEarned + store.todayHomeworkEarned" @close="showAllDone = false" />
+      <AllDoneEffect :show="showAllDone" :total-earned="store.todayTaskEarned" @close="showAllDone = false" />
 
     <!-- 主体：按 activeTab 切换 -->
     <main class="tt-body">
@@ -261,7 +261,7 @@
               <span class="tt-record-name">{{ c.projectName }}</span>
               <span class="tt-record-date">{{ c.date }}</span>
             </div>
-            <span class="tt-record-points" :class="c.pointsEarned < 0 ? 'is-neg' : ''">{{ c.pointsEarned > 0 ? '+' : '' }}{{ c.pointsEarned }}</span>
+            <span class="tt-record-points" :class="c.pointsEarned < 0 ? 'is-neg' : ''"><template v-if="c.category === '学校'">+{{ c.pointsEarned }} 变身进度</template><template v-else>{{ c.pointsEarned > 0 ? '+' : '' }}{{ c.pointsEarned }}</template></span>
           </div>
         </div>
         <!-- 成就墙 -->
@@ -817,6 +817,7 @@ const EMOJI_RULES = [
   [/体能|体育/, '💪'],
   [/实验/, '🔬'],
   [/拨付/, '💰'],
+  [/罚分/, '🔻'],
   [/评分|评价/, '📝']
 ]
 function emojiForName(name = '') {
