@@ -35,5 +35,11 @@ export default defineConfig({
   //   }
   // })
  ],
- base: './'
+ base: './',
+ server: {
+  proxy: {
+   // dev 下把作业智能解析转发到本机方案D 服务器（8787 有 /parse + LLM key）
+   '/parse': 'http://127.0.0.1:8787'
+  }
+ }
 })

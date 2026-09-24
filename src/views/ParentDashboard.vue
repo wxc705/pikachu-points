@@ -95,8 +95,8 @@
           class="w-full rounded-xl bg-primary-soft/50 px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary transition-all resize-none"
         ></textarea>
         <div class="flex gap-2">
-          <button @click="parseHomework" :disabled="!hwRawText.trim()" class="flex-1 py-2.5 rounded-xl bg-primary text-ink text-xs font-semibold hover:bg-primary-soft disabled:opacity-40 transition-colors btn-press">
-            🔍 解析作业
+          <button @click="parseHomework" :disabled="!hwRawText.trim() || hwParsing" class="flex-1 py-2.5 rounded-xl bg-primary text-ink text-xs font-semibold hover:bg-primary-soft disabled:opacity-40 transition-colors btn-press">
+            {{ hwParsing ? '⏳ 智能解析中…' : '🔍 解析作业' }}
           </button>
           <button v-if="hwParsed.length" @click="saveHomework" :disabled="hwSaving" class="flex-1 py-2.5 rounded-xl bg-secondary text-white text-xs font-semibold hover:opacity-90 disabled:opacity-40 transition-all btn-press">
             {{ hwSaving ? '保存中...' : '✅ 保存' }}
@@ -104,9 +104,9 @@
         </div>
         <!-- 解析结果预览 -->
         <div v-if="hwParsed.length" class="space-y-1.5">
-          <p class="text-xs text-ink-soft font-medium">解析结果（点击可删除）：</p>
+          <p class="text-xs text-ink-soft font-medium">{{ hwEngine === 'ai' ? '✨ 智能解析结果' : '解析结果' }}（点击可删除）：</p>
           <div v-for="(t, i) in hwParsed" :key="i" class="flex items-center gap-2 text-sm">
-            <span class="flex-1">{{ t.name }}</span>
+            <span class="flex-1">{{ t.name }}<span v-if="t.subject || t.minutes || t.note" class="text-xs text-ink-soft ml-1.5">{{ [t.subject, t.minutes ? t.minutes + '分' : '', t.note].filter(Boolean).join(' · ') }}</span></span>
             <input v-model.number="t.points" type="number" min="1" max="10" class="w-14 rounded-lg bg-primary-soft/50 px-2 py-1 text-xs text-center" />
             <span class="text-xs text-ink-soft">分</span>
             <button @click="hwParsed.splice(i, 1)" class="text-red-400 text-xs hover:text-red-600">✕</button>
@@ -270,23 +270,48 @@ async function onFine() {
   } catch (e) { playError(); fineError.value = '罚分失败' }
 }
 
-// v4: 解析作业文本 → 任务列表
-function parseHomework() {
+// 解析作业文本 → 任务列表（方案D：优先本机 /parse LLM 智能解析，失败回退本地分段）
+const hwParsing = ref(false)
+const hwEngine = ref('') // 'ai' | 'local'：预览标题标识走了哪条路
+function defaultPoints(name) {
+  if (/练字|写字/.test(name)) return 3
+  if (/阅读|读书/.test(name)) return 2
+  return 2
+}
+function splitRawLocal(raw) {
+  return raw
+    .split(/[\n;；。]/)
+    .map((l) => l.replace(/^[\d]+[.、)\]）]\s*/, '').trim())
+    .filter(Boolean)
+    .map((name) => ({ name, points: defaultPoints(name) }))
+}
+async function parseHomework() {
   hwMsg.value = ''
   const raw = hwRawText.value.trim()
-  if (!raw) return
-  // 按换行/分号/句号拆行，过滤空行
-  const lines = raw.split(/[\n;；。]/).map((l) => l.trim()).filter(Boolean)
-  if (!lines.length) { hwMsg.value = '未识别到作业条目'; return }
-  hwParsed.value = lines.map((line) => {
-    let name = line.replace(/^[\d]+[.、)\]）]\s*/, '').trim() // 去掉开头序号
-    let points = 2 // 默认 2 分
-    // 关键词匹配自动设分值
-    if (/练字|写字/.test(name)) points = 3
-    if (/阅读|读书/.test(name)) points = 2
-    return { name, points }
-  })
+  if (!raw || hwParsing.value) return
   hwEditing.value = true
+  hwParsing.value = true
+  try {
+    const r = await fetch('/parse', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: raw, context: (store.todayTasks || []).map((t) => t.name) })
+    })
+    if (!r.ok) throw new Error('http ' + r.status)
+    const d = await r.json()
+    if (!Array.isArray(d.tasks)) throw new Error('bad tasks')
+    hwEngine.value = 'ai'
+    hwParsed.value = d.tasks.map((t) => ({ ...t, points: defaultPoints(t.name) }))
+    hwMsg.value = d.tasks.length ? '' : '未识别到作业条目'
+    return
+  } catch (e) {
+    console.warn('[parent] LLM 解析失败，回退本地分段:', e)
+    hwEngine.value = 'local'
+    hwParsed.value = splitRawLocal(raw)
+    hwMsg.value = hwParsed.value.length ? '⚠️ 智能解析不可用，已用本地分段' : '未识别到作业条目'
+  } finally {
+    hwParsing.value = false
+  }
 }
 
 // v4: 保存今日作业

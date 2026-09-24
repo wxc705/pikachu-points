@@ -158,6 +158,81 @@ const server = createServer(async (req, res) => {
     if (path === '/auth/v1/health') return sendJson(res, 200, { date: new Date().toUTCString() }, req)
     if (path === '/sync/health') return sendJson(res, 200, { ok: true, tables: TABLES, rows: Object.fromEntries(TABLES.map(t => [t, store[t].size])) }, req)
 
+    // ---- 作业智能解析：家长端原文 → LLM(mimo-v2.6-flash) → 结构化任务 ----
+    // key 每请求现读（环境变量优先，其次项目根 .env）→ 换 key 免重启
+    if (path === '/parse' && req.method === 'POST') {
+      const rawBody = await readBody(req)
+      let payload
+      try { payload = JSON.parse(rawBody || '{}') } catch (e) { return sendJson(res, 400, { error: 'bad json' }, req) }
+      const text = String(payload.text || '').trim()
+      if (!text) return sendJson(res, 400, { error: 'text required' }, req)
+      if (text.length > 8000) return sendJson(res, 413, { error: 'text too long' }, req)
+      let key = process.env.MIMO_API_KEY || ''
+      if (!key) {
+        try {
+          const envTxt = readFileSync(join(__dirname, '..', '.env'), 'utf8')
+          const line = envTxt.split(/\r?\n/).find((l) => l.startsWith('MIMO_API_KEY='))
+          if (line) key = line.slice('MIMO_API_KEY='.length).trim()
+        } catch (_) {}
+      }
+      if (!key) return sendJson(res, 503, { error: 'MIMO_API_KEY 未配置（项目根 .env）' }, req)
+      const ctx = Array.isArray(payload.context) ? payload.context.slice(0, 60).join('、') : ''
+      const system = '你是小学作业录入助手，把老师布置的作业原文解析成结构化任务列表。规则：\n' +
+        '1. 只输出学生实际要做的作业；剔除寒暄、通知、天气、"记得带水杯"等非作业内容\n' +
+        '2. 原子化：一个动作一条任务，逗号/顿号连接的并列动作必须切开（"抄写两遍，背诵课文"=2条）\n' +
+        '3. name：动词开头、不超过14字、保留量（如"口算20道""背诵《春天》"）\n' +
+        '4. note：补充信息（如"周五交"→note:"周五交"），没有则空字符串\n' +
+        '5. subject：语文/数学/英语/其他；minutes：按量估分钟数，没量给常规值\n' +
+        '6. 原文没有作业 → 输出 []\n' +
+        '7. 只输出 JSON 数组，无解释、无代码围栏：[{"name":"...","subject":"语文","minutes":15,"note":""}]' +
+        (ctx ? '\n今日课表已有任务（同名的不要重复输出）：' + ctx : '')
+      // LLM 输出 → 任务数组（剥围栏/取首个数组；非法返回 null → 502 前端回退本地分段）
+      const extractTasks = (content) => {
+        let s = String(content || '').trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '')
+        const m = s.match(/\[[\s\S]*\]/)
+        if (!m) return null
+        let arr
+        try { arr = JSON.parse(m[0]) } catch (e) { return null }
+        if (!Array.isArray(arr)) return null
+        return arr
+          .filter((t) => t && typeof t.name === 'string' && t.name.trim())
+          .map((t) => ({
+            name: String(t.name).trim().slice(0, 40),
+            subject: typeof t.subject === 'string' ? t.subject.slice(0, 10) : '',
+            minutes: Number(t.minutes) > 0 ? Number(t.minutes) : null,
+            note: typeof t.note === 'string' ? t.note.slice(0, 60) : ''
+          }))
+      }
+      const ctrl = new AbortController()
+      const timer = setTimeout(() => ctrl.abort(), 20000)
+      try {
+        const r = await fetch('https://token-plan-cn.xiaomimimo.com/v1/chat/completions', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', authorization: 'Bearer ' + key },
+          body: JSON.stringify({
+            model: process.env.MIMO_MODEL || 'mimo-v2.6-flash',
+            max_tokens: 1000,
+            temperature: 0.2,
+            messages: [
+              { role: 'system', content: system },
+              { role: 'user', content: '作业原文：\n"""\n' + text + '\n"""' }
+            ]
+          }),
+          signal: ctrl.signal
+        })
+        clearTimeout(timer)
+        if (!r.ok) return sendJson(res, 502, { error: 'LLM http ' + r.status + ': ' + (await r.text()).slice(0, 200) }, req)
+        const data = await r.json()
+        const content = data && data.choices && data.choices[0] && data.choices[0].message ? data.choices[0].message.content : ''
+        const tasks = extractTasks(content)
+        if (tasks === null) return sendJson(res, 502, { error: 'LLM 输出无法解析为 JSON', sample: String(content).slice(0, 200) }, req)
+        return sendJson(res, 200, { tasks, engine: data.model || 'mimo-v2.6-flash' }, req)
+      } catch (e) {
+        clearTimeout(timer)
+        return sendJson(res, 502, { error: 'LLM 调用失败: ' + (e.message || String(e)) }, req)
+      }
+    }
+
     // PostgREST 垫片 /rest/v1/<table>
     const m = path.match(/^\/rest\/v1\/([a-z_]+)$/)
     if (m) {

@@ -110,6 +110,7 @@
 - PostgREST 兼容子集：`POST /rest/v1/<t>?on_conflict=id`（upsert）+ `GET /rest/v1/<t>`（select *）+ apikey 守卫（`lan-sync-key-2026`）——`sync.js` 只用这两个动词，**同步核心代码零改动**
 - 同进程静态托管 `server/dist-lan/`（`npm run build:lan` 产物，`VITE_SUPABASE_URL=SAME_ORIGIN` → 运行时 `location.origin`：访问谁就同步谁，LAN/Tailscale/localhost 换主机名免重建）
 - 数据落盘 `server/data/*.json`（原子写、按请求读；该目录已 gitignore）
+- **`POST /parse` 作业智能解析（2026-09-23 追加）**：家长端原文+今日课表任务名 → 本机端点调 **mimo-v2.6-flash**（OpenAI 协议 `token-plan-cn.xiaomimimo.com/v1/chat/completions`，key=项目根 `.env` 的 `MIMO_API_KEY` 每请求现读、换 key 免重启，gitignore 挡、无 `VITE_` 前缀不进 bundle）→ 返回 `{tasks:[{name,subject,minutes,note}],engine}`；prompt 要求原子切分/剔寒暄噪音/截止日进 note/对照课表去重；**前端失败自动回退本地正则分段**（`⚠️ 智能解析不可用` + 预览标题不带 ✨），dev 走 vite proxy `/parse→127.0.0.1:8787`，Pages/无服务器环境天然回退
 - **撞 id 重分配**：同 id 不同内容 → 分配 `srv-N` 保并集绝不互相覆盖；同内容 → canonical 稳定序列化判等 → 幂等 no-op
 - **`daily_checkins` 业务键去重**：同 `(date,task_id)` created_at 新者胜（同时修了老代码撞键 `return` 吞掉批内后续行的 bug）
 - 启动：手动 `npm run sync-server` ／ 登录自启 `Startup\pikachu-sync.vbs`（免管理员隐藏窗口；删除该文件即卸载）
