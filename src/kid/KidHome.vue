@@ -18,6 +18,8 @@
       </div>
     </div>
 
+    <button class="kid-map-link" data-testid="kg-entry-kidhome" @click="openMap">🗺️ 冒险地图</button>
+
     <h2 class="kid-title">✨ 今天要做的事：</h2>
 
     <!-- 今日进度条：完成任务数 / 总数，给孩子即时成就感 -->
@@ -91,6 +93,7 @@
 
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { usePointsStore } from '../stores/points.js'
 import { isSupabaseConfigured } from '../services/supabase.js'
 import { playCoin, unlockAudio } from '../services/sound.js'
@@ -98,6 +101,10 @@ import CoinBurst from '../components/CoinBurst.vue'
 import './kid-style.css'
 
 const store = usePointsStore()
+const router = useRouter()
+function openMap() {
+  router.push('/map')
+}
 
 const goals = ref([])
 const usingFallback = ref(false)

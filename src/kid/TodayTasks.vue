@@ -13,6 +13,10 @@
         <span class="sb-item-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/></svg></span>
         冒险
       </button>
+      <button class="sb-item" data-testid="kg-entry-sidebar" @click="openMap">
+        <span class="sb-item-icon" aria-hidden="true">🗺️</span>
+        冒险地图
+      </button>
       <button class="sb-item" :class="{ 'is-active': activeTab === 'points' }" @click="activeTab = 'points'">
         <span class="sb-item-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5C7 4 6 9 6 9z"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5C17 4 18 9 18 9z"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg></span>
         基地
@@ -381,6 +385,7 @@
     <!-- 底部导航：手机竖版用（iPad 用左侧栏） -->
     <nav v-if="!isWide" class="tt-tabs">
       <button class="tt-tab" :class="{ 'is-active': activeTab === 'today' }" @click="activeTab = 'today'">📋 冒险</button>
+      <button class="tt-tab" data-testid="kg-entry-tab" @click="openMap">🗺️ 地图</button>
       <button class="tt-tab" :class="{ 'is-active': activeTab === 'points' }" @click="activeTab = 'points'">🏆 基地</button>
       <button class="tt-tab" :class="{ 'is-active': activeTab === 'apply' }" @click="activeTab = 'apply'">🛒 商城</button>
       <button class="tt-tab" :class="{ 'is-active': activeTab === 'settings' }" @click="activeTab = 'settings'">⚙️ 设置</button>
@@ -465,6 +470,7 @@
 
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { usePointsStore } from '../stores/points.js'
 import { dateToWeekday, WEEKDAYS } from '../utils/weekday.js'
 import { playCoin, unlockAudio } from '../services/sound.js'
@@ -476,6 +482,10 @@ import AllDoneEffect from '../components/AllDoneEffect.vue'
 import './kid-style.css'
 
 const store = usePointsStore()
+const router = useRouter()
+function openMap() {
+  router.push('/map')
+}
 
 const activeTab = ref('today')
 const loading = ref(true)

@@ -10,6 +10,7 @@ import Settings from './views/Settings.vue'
 import WeeklyPlan from './views/WeeklyPlan.vue'
 import KidHome from './kid/KidHome.vue'
 import TodayTasks from './kid/TodayTasks.vue'
+import KnowledgeMap from './kid/KnowledgeMap.vue'
 
 // iPad 检测：UA 含 iPad，或 macOS 且支持多点触控（iPadOS 13+ 伪装成 Mac）
 function isIPad() {
@@ -36,6 +37,7 @@ const routes = [
   if (isIPad()) next('/kid/today')
   else next()
  } },
+ { path: '/map', name: 'map', component: KnowledgeMap },
  { path: '/kid/today', name: 'kid-today', component: TodayTasks }
 ]
 
