@@ -35,7 +35,7 @@ export default defineConfig({
   //   }
   // })
  ],
- base: './',
+ base: process.env.VITE_BASE || './',
  server: {
   proxy: {
    // dev 下把作业智能解析转发到本机方案D 服务器（8787 有 /parse + LLM key）

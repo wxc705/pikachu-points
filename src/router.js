@@ -21,8 +21,8 @@ function isIPad() {
 const routes = [
  { path: '/', name: 'home', component: Home, beforeEnter(to, from, next) {
   // iPad 添加到主屏幕后打开 → 直接进 kid 端
-  if (isIPad()) next('/kid/today')
-  else next()
+  // v6上线统一入口：旧KidHome会把全周49项全倒出来（过滤失效），无条件跳今日视图
+  next('/kid/today')
  } },
  { path: '/exchange', name: 'exchange', component: Exchange },
  { path: '/history', name: 'history', component: History },
@@ -34,8 +34,8 @@ const routes = [
  { path: '/weekly-plan', name: 'weekly-plan', component: WeeklyPlan },
  { path: '/kid', name: 'kid', component: KidHome, beforeEnter(to, from, next) {
   // iPad 横版走今日任务清单，手机竖版保持旧 KidHome
-  if (isIPad()) next('/kid/today')
-  else next()
+  // v6上线统一入口：旧KidHome会把全周49项全倒出来（过滤失效），无条件跳今日视图
+  next('/kid/today')
  } },
  { path: '/map', name: 'map', component: KnowledgeMap },
  { path: '/kid/today', name: 'kid-today', component: TodayTasks }
