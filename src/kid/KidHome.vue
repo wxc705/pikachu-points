@@ -95,7 +95,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { usePointsStore } from '../stores/points.js'
-import { isSupabaseConfigured } from '../services/supabase.js'
+import { isSyncEngineConfigured } from '../services/githubSync.js'
 import { playCoin, unlockAudio } from '../services/sound.js'
 import CoinBurst from '../components/CoinBurst.vue'
 import './kid-style.css'
@@ -146,7 +146,7 @@ async function loadGoals() {
   try {
     // 跨设备：先尝试从云端拉一次（家长在另一台设备配的周计划）
     // 带 6s 超时，断网/未配置也立即走本地，不让孩子干等
-    if (isSupabaseConfigured()) {
+    if (isSyncEngineConfigured()) {
       try {
         await Promise.race([
           store.syncPullFromCloud(),

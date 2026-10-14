@@ -6,6 +6,14 @@
 import { getAllCheckins, getAllRequests, getProjects, putCheckin, putProject, putExchangeRequest, getAllWeeklyTasks, putWeeklyTask, getAllDailyCheckins, putDailyCheckin, getDailyHomeworkAll, putDailyHomework, clearSyncDirty, setSyncDirtySuppressed } from './db.js'
 
 import { supabase, isSupabaseConfigured } from './supabase.js'
+import { SYNC_ENGINE, isSyncEngineConfigured, syncEngineClient } from './githubSync.js'
+
+// ---- 引擎选择（t017）：VITE_SYNC_ENGINE=github → GitHub 私有仓 Contents API；
+// 否则（dev / build:lan SAME_ORIGIN）走原 Supabase 路径，局域网垫片行为不变 ----
+const engine = syncEngineClient()
+const ENGINE_UNCONFIGURED_MSG = SYNC_ENGINE === 'github'
+ ? 'GitHub 同步未配置：缺 VITE_GH_TOKEN / VITE_GH_REPO'
+ : 'Supabase 未配置：检查 .env'
 
 // ---- 状态订阅 ----
 const listeners = new Set()
@@ -39,8 +47,8 @@ function nowIso() { return new Date().toISOString() }
 
 // push: 把本地 IndexedDB 全部数据推到云（last-write-wins by id）
 export async function push() {
- if (!isSupabaseConfigured()) {
- throw new Error('Supabase 未配置：检查 .env')
+ if (!isSyncEngineConfigured()) {
+ throw new Error(ENGINE_UNCONFIGURED_MSG)
  }
  if (state.isSyncing) return state.lastResult
  state.isSyncing = true
@@ -76,7 +84,7 @@ export async function push() {
      updated_at: nowIso()
    }))
    try {
-     const { error } = await supabase.from('checkins').upsert(rows, { onConflict: 'id' })
+     const { error } = await engine.from('checkins').upsert(rows, { onConflict: 'id' })
      if (error) throw error
      pushed += rows.length
    } catch (e) { errors.push({ table: 'checkins', error: e.message || String(e) }) }
@@ -96,7 +104,7 @@ export async function push() {
      updated_at: nowIso()
    }))
    try {
-     const { error } = await supabase.from('exchange_requests').upsert(rows, { onConflict: 'id' })
+     const { error } = await engine.from('exchange_requests').upsert(rows, { onConflict: 'id' })
      if (error) throw error
      pushed += rows.length
    } catch (e) { errors.push({ table: 'exchange_requests', error: e.message || String(e) }) }
@@ -114,7 +122,7 @@ export async function push() {
      updated_at: p.updatedAt ? new Date(p.updatedAt).toISOString() : nowIso()
    }))
    try {
-     const { error } = await supabase.from('projects').upsert(rows, { onConflict: 'id' })
+     const { error } = await engine.from('projects').upsert(rows, { onConflict: 'id' })
      if (error) throw error
      pushed += rows.length
    } catch (e) { errors.push({ table: 'projects', error: e.message || String(e) }) }
@@ -136,7 +144,7 @@ export async function push() {
      updated_at: nowIso()
    }))
    try {
-     const { error } = await supabase.from('weekly_tasks').upsert(rows, { onConflict: 'id' })
+     const { error } = await engine.from('weekly_tasks').upsert(rows, { onConflict: 'id' })
      if (error) throw error
      pushed += rows.length
    } catch (e) { errors.push({ table: 'weekly_tasks', error: e.message || String(e) }) }
@@ -152,7 +160,7 @@ export async function push() {
      created_at: h.createdAt ? new Date(h.createdAt).toISOString() : nowIso()
    }))
    try {
-     const { error } = await supabase.from('daily_homework').upsert(rows, { onConflict: 'id' })
+     const { error } = await engine.from('daily_homework').upsert(rows, { onConflict: 'id' })
      if (error) throw error
      pushed += rows.length
    } catch (e) { errors.push({ table: 'daily_homework', error: e.message || String(e) }) }
@@ -171,7 +179,7 @@ export async function push() {
      updated_at: nowIso()
    }))
    try {
-     const { error } = await supabase.from('daily_checkins').upsert(rows, { onConflict: 'id' })
+     const { error } = await engine.from('daily_checkins').upsert(rows, { onConflict: 'id' })
      if (error) throw error
      pushed += rows.length
    } catch (e) { errors.push({ table: 'daily_checkins', error: e.message || String(e) }) }
@@ -199,8 +207,8 @@ export async function push() {
 // pull: 从云拉取，按 createdAt 合并（last-write-wins）
 // 关键：不再 clearAll() 后覆盖！改为按 id 合并，云端/本地哪条 createdAt 较新就保留哪条
 export async function pull() {
- if (!isSupabaseConfigured()) {
- throw new Error('Supabase 未配置：检查 .env')
+ if (!isSyncEngineConfigured()) {
+ throw new Error(ENGINE_UNCONFIGURED_MSG)
  }
  if (state.isSyncing) return state.lastResult
  state.isSyncing = true
@@ -212,12 +220,12 @@ export async function pull() {
  // 逐表拉取，表不存在/无权访问只记错误，不连坐其他表（核心打卡/兑换数据优先）
  const pullErrors = []
  const [cr, rr, pr, wt, dhr, dcr] = await Promise.allSettled([
-   supabase.from('checkins').select('*'),
-   supabase.from('exchange_requests').select('*'),
-   supabase.from('projects').select('*'),
-   supabase.from('weekly_tasks').select('*'),
-   supabase.from('daily_homework').select('*'),
-   supabase.from('daily_checkins').select('*')
+   engine.from('checkins').select('*'),
+   engine.from('exchange_requests').select('*'),
+   engine.from('projects').select('*'),
+   engine.from('weekly_tasks').select('*'),
+   engine.from('daily_homework').select('*'),
+   engine.from('daily_checkins').select('*')
  ])
  const cloudCheckins = cr.status === 'fulfilled' && !cr.value.error ? cr.value.data : null
  if (cr.status === 'rejected' || (cr.value && cr.value.error)) pullErrors.push({ table: 'checkins', error: cr.status === 'rejected' ? cr.reason.message : cr.value.error.message })
@@ -465,7 +473,7 @@ export async function sync() {
 
 // 测试用：清空云（不实现，留空接口）
 export async function clearCloud() {
- if (!isSupabaseConfigured()) return
+ if (!isSyncEngineConfigured()) return
  // Supabase 没"全清"接口，要清得在 Dashboard 跑 SQL
  console.warn('[sync] clearCloud 不支持远程清空（安全）')
 }

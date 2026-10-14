@@ -7,6 +7,7 @@
   "dev": "vite",
   "build": "vite build",
   "build:lan": "node scripts/build-lan.mjs",
+  "build:cloud": "node scripts/build-cloud.mjs",
   "sync-server": "node server/sync-server.mjs",
   "preview": "vite preview"
  },
