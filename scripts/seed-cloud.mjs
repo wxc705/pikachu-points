@@ -14,6 +14,7 @@
 //
 // 语义：按 id 并集合并，updated_at/created_at 新者赢；云端已有的行永不被"读空"覆盖。
 import { readFileSync } from 'node:fs'
+import { SYNC_TABLE_KEYS, mergeRows, toCloud } from '../src/services/merge.js'
 
 const args = process.argv.slice(2)
 const dryRun = args.includes('--dry-run')
@@ -35,63 +36,15 @@ const headers = (accept) => ({
   'Content-Type': 'application/json'
 })
 
-// 与 src/services/sync.js 的 push 映射保持一致（行级字段白名单：push 加字段这里必须跟）
-const TABLE_MAP = {
-  checkins: (r) => ({
-    id: r.id, task_id: r.taskId || null, project_id: r.projectId ?? null, project_name: r.projectName,
-    category: r.category, points_earned: r.pointsEarned, note: r.note, checked_by: r.checkedBy,
-    date: r.date, created_at: iso(r.createdAt), updated_at: iso(r.updatedAt || r.createdAt)
-  }),
-  exchange_requests: (r) => ({
-    id: r.id, reward: r.reward, points_cost: r.pointsCost, note: r.note, status: r.status,
-    viewed: r.viewed || false, date: r.date, created_at: iso(r.createdAt), decided_at: iso(r.decidedAt)
-  }),
-  projects: (r) => ({
-    id: r.id, category: r.category, name: r.name, points: r.points, point_range: r.pointRange,
-    sort_order: r.sortOrder, is_active: r.isActive, updated_at: iso(r.updatedAt)
-  }),
-  weekly_tasks: (r) => ({
-    id: r.id, weekday: r.weekday, time_slot: r.timeSlot, name: r.name, points: r.points,
-    category: r.category, sort_order: r.sortOrder, is_active: r.isActive !== false,
-    once: r.once || null, skips: Array.isArray(r.skips) && r.skips.length ? r.skips : null,
-    created_at: iso(r.createdAt), updated_at: iso(r.updatedAt || r.createdAt)
-  }),
-  daily_homework: (r) => ({
-    id: r.id, date: r.date, tasks: r.tasks, source: r.source, created_at: iso(r.createdAt)
-  }),
-  daily_checkins: (r) => ({
-    id: r.id, date: r.date, task_id: r.taskId, task_name: r.taskName, category: r.category,
-    points: r.points, completed_at: r.completedAt || null, checked_by: r.checkedBy || 'kid',
-    updated_at: iso(r.updatedAt || r.completedAt || r.createdAt)
-  })
-}
-
-function iso(v) {
-  if (v == null || v === '') return undefined
-  if (typeof v === 'number') return new Date(v).toISOString()
-  const t = Date.parse(v)
-  return isNaN(t) ? String(v) : new Date(t).toISOString()
-}
-
-function rowTs(row) {
-  if (!row || typeof row !== 'object') return 0
-  for (const k of ['updated_at', 'created_at']) {
-    if (row[k]) {
-      const t = Date.parse(row[k])
-      if (!isNaN(t)) return t
-      const n = Number(row[k])
-      if (!isNaN(n)) return n
-    }
-  }
-  const n = Number(row.id)
-  return isNaN(n) ? 0 : n
-}
-
-function unionById(cloud, incoming) {
-  const out = { ...cloud } // 云端已有行先占位：读空也删不掉它们
-  for (const [k, row] of Object.entries(incoming)) {
-    const prev = out[k]
-    if (!prev || rowTs(row) >= rowTs(prev)) out[k] = row
+// 行映射唯一来源：src/services/merge.js（B1）。旧 dump（自增 id）与 v5 dump（uid）都能读；
+// 合并同样走 mergeRows：uid 匹配 + updatedAt LWW + 本地墓碑回传，云端已有行永不被读空覆盖。
+function mergedCloudRows(table, cloud, srcRows) {
+  const { rows } = mergeRows(table, srcRows || [], Object.values(cloud || {}), [])
+  const out = {}
+  for (const row of rows) {
+    const cloudRow = toCloud(table, row)
+    if (!cloudRow || cloudRow.uid == null) continue
+    out[String(cloudRow.uid)] = cloudRow
   }
   return out
 }
@@ -147,7 +100,7 @@ async function main() {
   if (verifyOnly) {
     let total = 0
     const lines = []
-    for (const table of Object.keys(TABLE_MAP)) {
+    for (const table of SYNC_TABLE_KEYS) {
       const g = await getRows(table)
       const n = g.rows ? Object.keys(g.rows).length : 0
       total += n
@@ -169,15 +122,9 @@ async function main() {
 
   let pushedRows = 0
   const report = []
-  for (const [table, mapper] of Object.entries(TABLE_MAP)) {
+  for (const table of SYNC_TABLE_KEYS) {
     const src = Array.isArray(stores[table]) ? stores[table] : []
-    const incoming = {}
-    for (const r of src) {
-      if (!r || r.id == null) continue
-      const row = mapper(r)
-      if (row.updated_at === undefined) delete row.updated_at
-      incoming[String(r.id)] = row
-    }
+    const srcCount = src.filter((r) => r && (r.id != null || r.uid != null)).length
 
     for (let attempt = 0; attempt < 2; attempt++) {
       const s = await getSha(table)
@@ -189,18 +136,18 @@ async function main() {
         if (cur.rows == null) { report.push(`  ${table.padEnd(18)} ✗ 云端文件存在但读取为空，拒绝覆盖（红线），跳过`); break }
         cloud = cur.rows
       }
-      const merged = unionById(cloud, incoming)
+      const merged = mergedCloudRows(table, cloud, src)
       if (!Object.keys(merged).length) { report.push(`  ${table.padEnd(18)} 0 rows（本地与云端都空，不写）`); break }
       if (dryRun) {
-        report.push(`  ${table.padEnd(18)} [dry-run] 云端 ${Object.keys(cloud).length} + 本地 ${Object.keys(incoming).length} → ${Object.keys(merged).length}`)
+        report.push(`  ${table.padEnd(18)} [dry-run] 云端 ${Object.keys(cloud).length} + 本地 ${srcCount} → ${Object.keys(merged).length}`)
         break
       }
-      const e = await putTable(table, merged, s.sha, `seed(t018): baseline ${table} ${Object.keys(incoming).length} rows from dump`)
+      const e = await putTable(table, merged, s.sha, `seed(t018): baseline ${table} ${srcCount} rows from dump`)
       if (e.error && /409|sha/i.test(e.error) && attempt === 0) continue // 冲突 → 重拉重合并重试 1 次
       if (e.error) { report.push(`  ${table.padEnd(18)} ✗ PUT 失败: ${e.error}`); break }
       const n = Object.keys(merged).length
       pushedRows += n
-      report.push(`  ${table.padEnd(18)} 云端 ${Object.keys(cloud).length} + 本地 ${Object.keys(incoming).length} → ${n} rows ✓`)
+      report.push(`  ${table.padEnd(18)} 云端 ${Object.keys(cloud).length} + 本地 ${srcCount} → ${n} rows ✓`)
       break
     }
   }

@@ -11,7 +11,7 @@ console.log(`[build-lan] VITE_SUPABASE_URL=${SYNC_URL}`)
 const r = spawnSync('npm', ['run', 'build'], {
   stdio: 'inherit',
   shell: process.platform === 'win32', // Windows 下 npm 是 npm.cmd
-  env: { ...process.env, VITE_SUPABASE_URL: SYNC_URL, VITE_BASE: '/', VITE_SUPABASE_PUBLISHABLE_KEY: SYNC_KEY }
+  env: { ...process.env, VITE_SUPABASE_URL: SYNC_URL, VITE_BASE: '/', VITE_SUPABASE_PUBLISHABLE_KEY: SYNC_KEY, VITE_SYNC_ENGINE: '' }
 })
 if (r.status) process.exit(r.status || 1)
 

@@ -1,4 +1,4 @@
-import { getProjects, addProject } from './db.js'
+import { getProjects, addProject, stableUid } from './db.js'
 
 // Each item: { category, name, points, pointRange?, sortOrder, isActive: true }
 // `pointRange` is the [min, max] the evaluator can pick from for subjective awards.
@@ -40,7 +40,14 @@ export async function seedIfEmpty() {
  const existing = await getProjects()
  if (existing && existing.length >0) return false
  for (const item of SEED_PROJECTS) {
- await addProject({ ...item, isActive: true })
+ await addProject({
+  ...item,
+  uid: stableUid('project', `${item.category}|${item.name}`),
+  // 种子时间戳固定 0：新设备首次 pull 时云端真实编辑更新，不会把家长改过的名字/积分盖回种子
+  createdAt: 0,
+  updatedAt: 0,
+  isActive: true
+ })
  }
  return true
 }

@@ -17,6 +17,7 @@ import { createServer } from 'node:http'
 import { readFileSync, writeFileSync, mkdirSync, existsSync, renameSync, statSync, createReadStream } from 'node:fs'
 import { join, dirname, extname, resolve, normalize } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { fromCloud, mergeRows, toCloud, rowUid } from '../src/services/merge.js'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const DATA_DIR = process.env.SYNC_DATA_DIR || join(__dirname, 'data')
@@ -45,49 +46,25 @@ function saveTable(t) {
   renameSync(tmp, p)
 }
 
-// 稳定序列化（键排序）：撞 id 判等用，避免键序差异造成误判重分配
-function canonical(v) {
-  if (v === null || v === undefined) return 'null'
-  if (Array.isArray(v)) return '[' + v.map(canonical).join(',') + ']'
-  if (typeof v === 'object') return '{' + Object.keys(v).sort().map((k) => JSON.stringify(k) + ':' + canonical(v[k])).join(',') + '}'
-  return JSON.stringify(v)
-}
-
-// daily_checkins 唯一性：同 (date, task_id) 只留 created_at 较新的一条。
-// （落地 TODO-supabase-sync.md 里的 unique(date,task_id) 建议：
-//   两台设备离线各打同一任务 → 不同 id → upsert by id 会双记，这里按业务键去重。）
-// 并集保护：同 id 但内容不同 = 两台设备自增 id 撞车 → 分配 srv-N 保留双方行，绝不互相覆盖。
+// 统一走 src/services/merge.js 的映射与 LWW（B1）：不再在这里手写一份 row 白名单。
+// 客户端主键已是 uid；服务端只做「收到行按 updatedAt 合并进 Map」，键 = uid。
 function upsertRows(table, rows) {
   const map = store[table]
-  const affected = []
-  for (const row0 of rows) {
-    let row = row0
-    if (row == null || row.id == null) continue
-    if (table === 'daily_checkins' && row.date != null && row.task_id != null) {
-      let skip = false
-      for (const [oid, orow] of map) {
-        if (oid !== String(row.id) && orow.date === row.date && orow.task_id === row.task_id) {
-          const incomingTs = Number(row.created_at) || 0
-          const existingTs = Number(orow.created_at) || 0
-          if (existingTs >= incomingTs) { skip = true; break } // 较新者胜，丢弃这条
-          map.delete(oid) // incoming 更新 → 删旧
-        }
-      }
-      if (skip) continue
-    }
-    const rid = String(row.id)
-    if (map.has(rid)) {
-      const prev = map.get(rid)
-      if (canonical(prev) === canonical(row)) { affected.push(prev); continue } // 同内容副本 → 幂等 no-op
-      let n = 1
-      while (map.has('srv-' + n)) n++
-      row = { ...row, id: 'srv-' + n } // 撞 id 内容不同 → 重分配，保并集
-    }
-    map.set(String(row.id), row)
-    affected.push(row)
+  const incoming = (rows || []).map((r) => fromCloud(table, r)).filter(Boolean)
+  const incomingUids = new Set(incoming.map(rowUid).filter(Boolean))
+  const { rows: mergedLocal } = mergeRows(table, incoming, [...map.values()], [])
+
+  const next = new Map()
+  for (const row of mergedLocal) {
+    const cloudRow = toCloud(table, row)
+    if (!cloudRow || cloudRow.uid == null) continue
+    next.set(String(cloudRow.uid), cloudRow)
   }
+  store[table] = next
   saveTable(table)
-  return affected
+  return mergedLocal
+    .filter((row) => incomingUids.has(rowUid(row)))
+    .map((row) => toCloud(table, row))
 }
 
 // ---- HTTP ----

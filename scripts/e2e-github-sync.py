@@ -378,6 +378,130 @@ def main():
               not dump.get("readError"), dump.get("readError"))
         check("dumpData: 七张表全在（含 weekly_plan）", dump.get("hasStores") == 7, dump.get("hasStores"))
 
+        # ---- F: B4 重置为云端基线 → 云端账本四表显式写 {}、本地不再被旧账拉回 ----
+        # 先人为造一份「云端旧账本」，证明重置不是靠空表 push 静默跳过，而是真写空。
+        old_ledger = {
+            "tables/checkins.json": {"id": 7001, "project_name": "旧账本E2E", "points_earned": 9,
+                                     "category": "生活", "date": today,
+                                     "created_at": now_iso, "updated_at": now_iso},
+            "tables/daily_checkins.json": {"id": 7002, "date": today, "task_id": "old",
+                                           "task_name": "旧任务", "points": 1,
+                                           "completed_at": now_iso, "updated_at": now_iso},
+            "tables/exchange_requests.json": {"id": 7003, "reward": "旧兑换", "points_cost": 1,
+                                              "status": "approved", "date": today,
+                                              "created_at": now_iso, "updated_at": now_iso},
+            "tables/daily_homework.json": {"id": 7004, "date": today, "tasks": [],
+                                           "source": "旧作业", "updated_at": now_iso},
+        }
+        for key, row in old_ledger.items():
+            store[key] = {"sha": "mocksha-" + key.split("/")[-1], "content": json.dumps({str(row["id"]): row}, ensure_ascii=False)}
+
+        page.goto(BASE + "/#/parent")
+        page.wait_for_selector("button:has-text('重置为云端基线')", timeout=20000)
+        page.click("button:has-text('重置为云端基线')")
+        page.click("button:has-text('我已了解，继续')")
+        page.fill("input[placeholder='输入：清零']", "清零")
+        page.click("button:has-text('确认清零')")
+        wait_until(lambda: "tables/checkins.json" in store
+                   and json.loads(store["tables/checkins.json"]["content"]) == {},
+                   25, 0.5, "B4 云端 checkins 写成 {}")
+        ledger_ok = all(json.loads(store[f"tables/{t}.json"]["content"]) == {}
+                        for t in ["checkins", "daily_checkins", "exchange_requests", "daily_homework"])
+        check("B4: 重置后云端账本四表显式为空对象 {}", ledger_ok,
+              {t: store[f"tables/{t}.json"]["content"][:30] for t in ["checkins", "daily_checkins", "exchange_requests", "daily_homework"]})
+        wait_until(lambda: len(read_tables(page, ["checkins"])["checkins"]) == 0,
+                   20, 0.5, "B4 本地账本清零")
+        after_reset = read_tables(page, ["checkins", "daily_checkins", "exchange_requests", "daily_homework",
+                                         "projects", "weekly_tasks"])
+        check("B4: 本地账本四表归零", all(len(after_reset[t]) == 0 for t in
+              ["checkins", "daily_checkins", "exchange_requests", "daily_homework"]),
+              {t: len(after_reset[t]) for t in after_reset})
+        check("B4: 配置两表保留（projects/weekly_tasks 不被重置清空）",
+              len(after_reset["projects"]) > 0 and len(after_reset["weekly_tasks"]) > 0,
+              {"projects": len(after_reset["projects"]), "weekly_tasks": len(after_reset["weekly_tasks"])})
+        check("B4: 配置两表仍在云端（clearCloudBaseline 只碰账本四表）",
+              "tables/projects.json" in store and len(json.loads(store["tables/projects.json"]["content"])) > 0,
+              sorted(store))
+
+        # ---- G: B3 墓碑删除 → push 下发 deleted_at，pull 不会把行复活 ----
+        tomb = page.evaluate(
+            """async () => {
+              const db = await new Promise((res, rej) => {
+                const r = indexedDB.open('pikachu-points')
+                r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error)
+              })
+              const row = await new Promise((res, rej) => {
+                const tx = db.transaction('weekly_tasks', 'readwrite')
+                const st = tx.objectStore('weekly_tasks')
+                const q = st.getAll()
+                q.onsuccess = () => {
+                  const hit = (q.result || []).find((x) => !x.deletedAt)
+                  if (!hit) return res(null)
+                  hit.deletedAt = Date.now()
+                  hit.updatedAt = hit.deletedAt
+                  st.put(hit)
+                  res({ uid: hit.uid, name: hit.name })
+                }
+                q.onerror = () => rej(q.error)
+              })
+              db.close()
+              return row
+            }"""
+        )
+        check("B3 阳性对照: 找到可墓碑化的 weekly_task", bool(tomb), tomb)
+        page.goto(BASE + "/#/parent")
+        page.wait_for_selector("button:has-text('推送')", timeout=20000)
+        page.click("button:has-text('推送')")
+        wait_until(lambda: "tables/weekly_tasks.json" in store
+                   and str(tomb["uid"]) in json.loads(store["tables/weekly_tasks.json"]["content"])
+                   and json.loads(store["tables/weekly_tasks.json"]["content"])[str(tomb["uid"])].get("deleted_at"),
+                   25, 0.5, "B3 push 下发 deleted_at")
+        cloud_tomb = json.loads(store["tables/weekly_tasks.json"]["content"])[str(tomb["uid"])]
+        check("B3: push 把本地墓碑行写入云端（deleted_at 有值）",
+              bool(cloud_tomb.get("deleted_at")) and cloud_tomb.get("uid") == str(tomb["uid"]),
+              cloud_tomb.get("deleted_at"))
+
+        # 模拟另一台设备本地仍有同一 uid 的活行（updatedAt 更旧）→ pull 后被墓碑标记删除
+        page.evaluate(
+            """async (uid) => {
+              const db = await new Promise((res, rej) => {
+                const r = indexedDB.open('pikachu-points')
+                r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error)
+              })
+              await new Promise((res, rej) => {
+                const tx = db.transaction('weekly_tasks', 'readwrite')
+                const st = tx.objectStore('weekly_tasks')
+                const q = st.get(uid)
+                q.onsuccess = () => {
+                  const row = q.result
+                  if (row) { delete row.deletedAt; row.updatedAt = 1; st.put(row) }
+                  res()
+                }
+                q.onerror = () => rej(q.error)
+              })
+              db.close()
+            }""",
+            tomb["uid"],
+        )
+        page.click("button:has-text('拉取')")
+        wait_until(lambda: any(str(r.get("uid")) == str(tomb["uid"]) and r.get("deletedAt")
+                               for r in read_tables(page, ["weekly_tasks"])["weekly_tasks"]),
+                   20, 0.5, "B3 pull 应用云端墓碑")
+        row_after = next(r for r in read_tables(page, ["weekly_tasks"])["weekly_tasks"]
+                         if str(r.get("uid")) == str(tomb["uid"]))
+        check("B3: pull 后本地行保留（不物理删）+ deletedAt 标记，供下一次 push 回传",
+              bool(row_after.get("deletedAt")) and row_after.get("uid") == str(tomb["uid"]),
+              row_after.get("deletedAt"))
+        live_cloud = [r for r in json.loads(store["tables/weekly_tasks.json"]["content"]).values()
+                      if not r.get("deleted_at")]
+        page.goto(BASE + "/#/projects")
+        page.wait_for_selector("h1:has-text('闯关管理')", timeout=20000)
+        ui_rows = page.locator("ul.divide-y > li").count()
+        local_projects_n = len(read_tables(page, ["projects"])["projects"])
+        check("B3: store 读取路径过滤墓碑（闯关管理 UI 只显示非墓碑行）",
+              ui_rows == len(live_cloud) + local_projects_n,
+              {"ui": ui_rows, "cloudLiveTasks": len(live_cloud), "projects": local_projects_n})
+
         browser.close()
 
     fails = [n for n, ok in results if not ok]

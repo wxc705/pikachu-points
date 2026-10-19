@@ -12,8 +12,10 @@ import { DB_NAME, DB_VERSION, openDB } from './db.js'
 const STORES = ['projects', 'checkins', 'exchange_requests', 'weekly_plan', 'weekly_tasks', 'daily_checkins', 'daily_homework']
 const LS_PREFIX = 'pikachu-points:'
 
-// 读库兜底：v4 协商失败（如设备上已是更高版本 → VersionError）时，
-// 用不带 version 的裸打开读现有版本——只读，绝不触发 upgrade 改 schema。
+// 读库兜底：先让 openDB() 完成 v5 迁移，再单独开一个原生只读连接导出；
+// 绝不关闭 app 的单例连接（关闭后 30s 同步/打卡全部写库失败）。
+// 注意：idb 的 IDBPDatabase.transaction() 返回包装对象，objectStore().getAll() 是 Promise
+// 而非 IDBRequest（给它挂 onsuccess 会永远不触发）——所以这里坚持用原生 indexedDB 连接。
 function openDbSafe() {
   const bare = () => new Promise((resolve, reject) => {
     const req = indexedDB.open(DB_NAME)
@@ -25,10 +27,9 @@ function openDbSafe() {
     }
     req.onblocked = () => reject(new Error('数据库被其它标签页占用(onblocked)'))
   })
-  return openDB().catch((e) => {
-    console.warn('[dump] 按 schema 版本打开失败，改用只读裸打开：', e)
-    return bare()
-  })
+  return openDB()
+    .catch((e) => { console.warn('[dump] 按 schema 版本打开失败，改用只读裸打开：', e) })
+    .then(() => bare())
 }
 
 export async function dumpData() {

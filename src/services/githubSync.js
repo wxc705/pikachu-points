@@ -8,6 +8,7 @@
 // 数十秒内自动吊销，烤进 dist 的 token 活不过一次部署（线上同步恒 401）。
 
 import { supabase, isSupabaseConfigured } from './supabase.js'
+import { fromCloud, mergeRows, toCloud } from './merge.js'
 
 export const SYNC_ENGINE = import.meta.env.VITE_SYNC_ENGINE || ''
 export const GH_TOKEN_KEY = 'pk_gh_token'
@@ -105,27 +106,17 @@ async function putTable(table, obj, sha, message) {
   return { status: res.status, error: errObj(`GitHub PUT tables/${table}.json HTTP ${res.status}${apiMsg ? ' ' + apiMsg : ''}`) }
 }
 
-// 按 id 合并：updated_at 新者赢（缺省回落 created_at → 无时间戳时不覆盖云端），本地新行直接进
-function rowTs(row) {
-  if (!row || typeof row !== 'object') return 0
-  for (const k of ['updated_at', 'created_at']) {
-    if (row[k]) {
-      const t = Date.parse(row[k])
-      if (!isNaN(t)) return t
-      const n = Number(row[k])
-      if (!isNaN(n)) return n
-    }
-  }
-  const id = Number(row.id)
-  return isNaN(id) ? 0 : id
-}
-function mergeById(cloud, incoming) {
-  const out = { ...cloud }
-  for (const row of incoming || []) {
-    if (row == null || row.id == null) continue
-    const key = String(row.id)
-    const prev = out[key]
-    if (!prev || rowTs(row) >= rowTs(prev)) out[key] = row
+// 按 uid/updatedAt 合并：薄包装 B1 的 mergeRows（保留原函数名，sync.js 的调用契约不变）。
+// cloud/incoming 都是云端 snake_case 行；输出仍是 { "<uid>": 云端行 }。
+function mergeById(cloud, incoming, table) {
+  const localRows = (incoming || []).map((r) => fromCloud(table, r)).filter(Boolean)
+  const cloudRows = Object.values(cloud || {})
+  const { rows } = mergeRows(table, localRows, cloudRows, [])
+  const out = {}
+  for (const row of rows) {
+    const c = toCloud(table, row)
+    if (!c || c.uid == null) continue
+    out[String(c.uid)] = c
   }
   return out
 }
@@ -147,7 +138,7 @@ async function upsert(table, rows) {
         }
         cloud = cur.rows
       }
-      const merged = mergeById(cloud, rows)
+      const merged = mergeById(cloud, rows, table)
       const put = await putTable(table, merged, s.sha, `sync(${table}): upsert ${rows.length} rows`)
       if (put.error && put.status === 409 && attempt === 0) continue
       return { error: put.error }
@@ -156,6 +147,37 @@ async function upsert(table, rows) {
   } catch (e) {
     return { error: errObj(`tables/${table}.json: ${e && e.message ? e.message : String(e)}`) }
   }
+}
+
+// B4：显式把账本四表在云端写成空对象 {}（带当前 sha，409 重拉重试 1 次）。
+// 配置两表（weekly_tasks/projects）不动；这是用户显式「重置为云端基线」的唯一写空路径。
+export async function clearCloudBaseline() {
+  const tables = ['checkins', 'daily_checkins', 'exchange_requests', 'daily_homework']
+  const errors = []
+  const cleared = []
+  for (const table of tables) {
+    let done = false
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const s = await getSha(table)
+      if (s.error) {
+        errors.push({ table, error: s.error.message || String(s.error) })
+        break
+      }
+      const put = await putTable(table, {}, s.sha, `reset(${table}): clear ledger baseline`)
+      if (put.error && put.status === 409 && attempt === 0) continue // 冲突 → 重拉 sha 重试 1 次
+      if (put.error) {
+        errors.push({ table, error: put.error.message || String(put.error) })
+        break
+      }
+      cleared.push(table)
+      done = true
+      break
+    }
+    if (!done && !errors.some((x) => x.table === table)) {
+      errors.push({ table, error: '409 冲突重试后仍失败' })
+    }
+  }
+  return { cleared, errors }
 }
 
 async function select(table) {

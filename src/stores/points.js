@@ -28,13 +28,16 @@ import {
   deleteDailyCheckin,
   putCheckin,
   clearLedgerData,
+  getLedgerSnapshot,
+  restoreLedgerSnapshot,
+  stableUid,
 
   isSyncDirty
 
 } from '../services/db.js'
 import { DEFAULT_THEME_ID, getTheme } from '../themes/index.js'
 import { WEEKLY_TASKS_SEED } from '../services/weeklyTasksSeed.js'
-import { push as syncPush, pull as syncPull, sync as syncBoth, onSyncChange, getSyncState, clearCloud as syncClearCloud } from '../services/sync.js'
+import { push as syncPush, pull as syncPull, sync as syncBoth, onSyncChange, getSyncState, clearCloud as syncClearCloud, clearCloudBaseline } from '../services/sync.js'
 import { dateToWeekday } from '../utils/weekday.js'
 import { getCharToday, markMorphToday, getMorphDays } from '../services/ultraSeq.js'
 
@@ -391,7 +394,13 @@ export const usePointsStore = defineStore('points', () => {
   const existing = await dbGetAllWeeklyTasks()
   if (existing.length > 0) { weeklyTasks.value = existing; return false }
   for (const t of WEEKLY_TASKS_SEED) {
-   await dbAddWeeklyTask({ ...t, isActive: true })
+   await dbAddWeeklyTask({
+    ...t,
+    uid: stableUid('weekly_task', `${t.weekday}|${t.sortOrder}|${t.name}`),
+    createdAt: 0,
+    updatedAt: 0,
+    isActive: true
+   })
   }
   weeklyTasks.value = await dbGetAllWeeklyTasks()
   return true
@@ -403,6 +412,7 @@ export const usePointsStore = defineStore('points', () => {
  async function resetWeeklyTasks() {
    const existing = await dbGetAllWeeklyTasks()
    for (const t of existing) await dbDeleteWeeklyTask(t.id)
+   // 恢复默认课表刻意用随机 uid：旧默认行已变墓碑，复用 stableUid 会被云端墓碑重新删掉。
    for (const t of WEEKLY_TASKS_SEED) {
      await dbAddWeeklyTask({ ...t, isActive: true })
    }
@@ -868,13 +878,31 @@ export const usePointsStore = defineStore('points', () => {
   lastSyncResult.value = null
  }
 
- // t018c：重置为云端基线——显式清零本机积分账本（用户主动操作，二次确认后调用）
+ // t018c/B4：重置为云端基线——本地清账本 + 云端账本四表显式写空 + 推送 + 拉取。
  // 语义：只清「账本」四表（checkins/daily_checkins/exchange_requests/daily_homework），
  //       保留「配置」两表（projects/weekly_tasks）；连胜(ultra-char)与里程碑状态一并归零。
- // 与数据安全红线的关系：红线拦的是 pull 副作用清数据；这是用户显式指令，不走 pull、不碰云端。
+ // 任一步失败：恢复本地清空前的四表快照并抛错，绝不静默半完成。
  async function resetToCloudBaseline() {
+  const snapshot = await getLedgerSnapshot()
   const counts = await clearLedgerData()
-  // 连胜/变身指针（localStorage）归零——积分从 0 起步，进度条也不留旧账
+  try {
+   await clearCloudBaseline() // 1) 云端四表写 {}（带 sha，409 重试）
+   const pushed = await syncPush() // 2) 推送（墓碑/配置表）
+   if (pushed.errors && pushed.errors.length) {
+    throw new Error('推送失败：' + pushed.errors.map((x) => `${x.table}: ${x.error}`).join(' | '))
+   }
+   const pulled = await syncPull() // 3) 拉取，确认云端就是空基线
+   if (pulled.errors && pulled.errors.length) {
+    throw new Error('拉取失败：' + pulled.errors.map((x) => `${x.table}: ${x.error}`).join(' | '))
+   }
+  } catch (e) {
+   let rollbackErr = null
+   try { await restoreLedgerSnapshot(snapshot) } catch (re) { rollbackErr = re }
+   try { await refresh() } catch (re) { /* 回滚后刷新失败不掩盖原始错误 */ }
+   const msg = e && e.message ? e.message : String(e)
+   throw new Error(`重置失败（本地账本已${rollbackErr ? '尝试' : ''}回滚${rollbackErr ? '，但回滚也失败：' + rollbackErr.message : ''}）：${msg}`)
+  }
+  // 只有云端基线也清成功，才归零本地进度（避免失败时连胜也丢了）
   try { localStorage.removeItem('pikachu-points:ultra-char') } catch (e) { /* 静默 */ }
   try { localStorage.removeItem(MILESTONE_KEY) } catch (e) { /* 静默 */ }
   morphDays.value = getMorphDays()
