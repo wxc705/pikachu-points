@@ -35,6 +35,38 @@
       </div>
       <p v-if="syncMsg" class="text-xs text-center font-medium text-secondary">{{ syncMsg }}</p>
       <p v-if="store.lastSyncError" class="text-xs text-center text-red-500">❌ {{ store.lastSyncError }}</p>
+      <!-- t018c：显式重置为云端基线（过往积分作废、零基线重来）——藏在同步区底部，双确认防误触 -->
+      <button @click="resetStep = 1" :disabled="store.isSyncing" class="w-full pt-2 mt-1 border-t border-ink-soft/10 text-[11px] text-ink-soft hover:text-red-500 disabled:opacity-40 transition-colors">
+        🧹 重置为云端基线（积分清零重来）
+      </button>
+      <!-- 双确认弹窗：第一步说明后果 → 第二步打字确认 -->
+      <div v-if="resetStep > 0" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-6" @click.self="resetStep = 0">
+        <div class="rounded-3xl bg-surface shadow-2xl p-6 w-full max-w-sm space-y-4">
+          <template v-if="resetStep === 1">
+            <h3 class="font-bold text-base text-red-500">⚠️ 重置为云端基线</h3>
+            <ul class="text-sm text-ink-soft space-y-1.5 list-disc pl-5">
+              <li>本机全部<b>积分记录将清零</b>（打卡流水、兑换记录、作业记录）</li>
+              <li>课表与项目配置<b>保留不动</b></li>
+              <li>此操作不可撤销（如需留底，先在控制台执行 <code class="text-xs">dumpData()</code> 导出）</li>
+            </ul>
+            <div class="grid grid-cols-2 gap-2 pt-1">
+              <button @click="resetStep = 0" class="py-2.5 rounded-xl bg-primary-soft/70 text-ink text-sm font-semibold hover:bg-primary transition-colors btn-press">取消</button>
+              <button @click="resetStep = 2" class="py-2.5 rounded-xl bg-red-500 text-white text-sm font-bold hover:bg-red-600 transition-colors btn-press">我已了解，继续</button>
+            </div>
+          </template>
+          <template v-else>
+            <h3 class="font-bold text-base text-red-500">最后确认</h3>
+            <p class="text-sm text-ink-soft">积分将归 0，两台设备都重置后从同一起跑线重新累计。输入 <b class="text-ink">清零</b> 确认：</p>
+            <input v-model="resetConfirmText" placeholder="输入：清零" class="w-full rounded-xl bg-primary-soft/50 px-4 py-3 text-sm text-center focus:outline-none focus:ring-2 focus:ring-red-400 transition-all" />
+            <div class="grid grid-cols-2 gap-2">
+              <button @click="resetStep = 0; resetConfirmText = ''" class="py-2.5 rounded-xl bg-primary-soft/70 text-ink text-sm font-semibold hover:bg-primary transition-colors btn-press">取消</button>
+              <button @click="onResetBaseline" :disabled="resetConfirmText.trim() !== '清零' || store.isSyncing" class="py-2.5 rounded-xl bg-red-500 text-white text-sm font-bold hover:bg-red-600 disabled:opacity-40 transition-colors btn-press">
+                {{ store.isSyncing ? '…' : '确认清零' }}
+              </button>
+            </div>
+          </template>
+        </div>
+      </div>
     </section>
 
     <!-- 待确认兑换 -->
@@ -176,6 +208,9 @@ import { CheckCircle2, Star, Gift, Clock, Upload, Download, RefreshCw, Cloud } f
 const store = usePointsStore()
 const { decide } = useExchangeDecide()
 const syncMsg = ref('')
+// t018c：重置为云端基线（0=关 1=后果说明 2=打字确认）
+const resetStep = ref(0)
+const resetConfirmText = ref('')
 const grantAmount = ref(null)
 const grantReason = ref('')
 const grantError = ref('')
@@ -234,6 +269,22 @@ async function onSync() {
       : `✅ 推 ${r.pushed} / 拉 ${r.pulled}`
     setTimeout(() => (syncMsg.value = ''), 6000)
   } catch (e) { syncMsg.value = `❌ 同步失败：${e.message}` }
+}
+
+// t018c：显式清零本机积分账本 → 与空云端基线对齐（用户主动操作，非同步副作用）
+async function onResetBaseline() {
+  if (resetConfirmText.value.trim() !== '清零') return
+  try {
+    const counts = await store.resetToCloudBaseline()
+    const total = Object.values(counts || {}).reduce((s, n) => s + (n || 0), 0)
+    playError() // 清零音效提示（严肃操作）
+    syncMsg.value = `🧹 已重置为云端基线：清除 ${total} 条积分记录，积分归 0。另一台设备也重置后点「拉取」对齐`
+    resetStep.value = 0
+    resetConfirmText.value = ''
+    setTimeout(() => (syncMsg.value = ''), 12000)
+  } catch (e) {
+    syncMsg.value = `❌ 重置失败：${e.message}`
+  }
 }
 
 function grantDelta(delta) { grantAmount.value = (grantAmount.value || 0) + delta }

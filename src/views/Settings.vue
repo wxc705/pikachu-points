@@ -69,6 +69,32 @@
       </ul>
     </section>
 
+    <!-- t019 云同步密钥：运行时读 localStorage `pk_gh_token`，token 永不进构建产物
+         （烤进公开仓 dist 的密钥会被 GitHub secret scanning 数十秒内自动吊销 → 线上恒 401） -->
+    <section v-if="engineGithub" class="rounded-2xl bg-surface shadow-sm card-lift p-4 space-y-3">
+      <h2 class="font-bold text-sm">🔐 云同步密钥</h2>
+      <p class="text-xs text-ink-soft">粘贴 GitHub 访问密钥，只保存在本机浏览器（不进安装包、不上传）</p>
+      <div class="flex gap-2">
+        <input
+          id="gh-token-input"
+          v-model="ghTokenInput"
+          type="password"
+          autocomplete="off"
+          spellcheck="false"
+          placeholder="粘贴密钥后点保存"
+          class="flex-1 min-w-0 rounded-xl border border-ink-soft/20 bg-white px-3 py-2.5 text-sm"
+        />
+        <button data-testid="gh-token-save" @click="saveGhToken" class="rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold btn-press">保存</button>
+      </div>
+      <div class="flex items-center justify-between text-xs">
+        <span class="text-ink-soft">
+          <template v-if="ghTokenLen">已保存：<code>••••••••</code>（长度 {{ ghTokenLen }}）</template>
+          <template v-else>未保存 —— 未录入时点同步会提示先来这里</template>
+        </span>
+        <button v-if="ghTokenLen" @click="clearGhToken" class="text-red-500 font-semibold">清除</button>
+      </div>
+    </section>
+
     <button
       v-if="copyToast"
       class="w-full rounded-xl bg-primary-soft text-ink font-semibold py-2.5 btn-press shadow-sm"
@@ -82,6 +108,7 @@
 import { computed, ref } from 'vue'
 import { usePointsStore } from '../stores/points.js'
 import { THEMES, getTheme } from '../themes/index.js'
+import { SYNC_ENGINE, getGithubToken, setGithubToken, clearGithubToken } from '../services/githubSync.js'
 
 const store = usePointsStore()
 const themes = THEMES
@@ -90,10 +117,40 @@ const copyToast = ref('')
 const currentId = computed(() => store.currentThemeId)
 const currentTheme = computed(() => getTheme(currentId.value))
 
+function toast(msg) {
+  copyToast.value = msg
+  setTimeout(() => (copyToast.value = ''), 2500)
+}
+
 function select(t) {
   if (t.disabled) return
   store.setTheme(t.id)
   copyToast.value = `已切换到 ${t.name} 主题`
   setTimeout(() => (copyToast.value = ''), 2000)
+}
+
+// ---- t019 云同步密钥（GitHub 引擎专属）----
+// token 运行时存 localStorage `pk_gh_token`，githubSync 每次请求现读 → 保存后立即可用、无需刷新。
+// 绝不写进构建产物：公开仓里的密钥会被 GitHub secret scanning 自动吊销。
+const engineGithub = SYNC_ENGINE === 'github'
+const ghTokenInput = ref('')
+const ghTokenLen = ref(engineGithub ? (getGithubToken() || '').length : 0)
+
+function saveGhToken() {
+  const v = (ghTokenInput.value || '').trim()
+  if (!v) {
+    toast('⚠️ 密钥为空，未保存')
+    return
+  }
+  setGithubToken(v) // 输入框 type=password + 只回显长度，明文不留痕
+  ghTokenLen.value = v.length
+  ghTokenInput.value = ''
+  toast('✅ 云同步密钥已保存（仅本机浏览器），现在可以直接同步')
+}
+
+function clearGhToken() {
+  clearGithubToken()
+  ghTokenLen.value = 0
+  toast('🧹 云同步密钥已清除')
 }
 </script>

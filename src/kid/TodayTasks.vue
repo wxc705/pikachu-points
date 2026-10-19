@@ -1,11 +1,11 @@
 <template>
   <div class="tt-page" :class="{ 'tt-page--sidebar': isWide }">
     <!-- 角色壁纸：三件套之一，半透明垫最底层（pointer-events 不挡交互） -->
-    <div class="tt-wall" :style="{ backgroundImage: `url(/ultraman/seq/${ultraChar.key}/${ultraChar.wall})` }"></div>
+    <div class="tt-wall" :style="{ backgroundImage: `url(./ultraman/seq/${ultraChar.key}/${ultraChar.wall})` }"></div>
     <!-- 左侧导航栏（宽屏 ≥769px：桌面+iPad 横版统一显示，同设计稿） -->
     <nav v-if="isWide" class="tt-sidebar">
       <div class="sb-avatar">
-        <img :src="`/ultraman/seq/${ultraChar.key}/avatar.jpg`" :alt="ultraChar.name" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" />
+        <img :src="`./ultraman/seq/${ultraChar.key}/avatar.jpg`" :alt="ultraChar.name" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'" />
         <span class="sb-avatar-emoji" style="display:none">{{ ultramanEmoji }}</span>
         <span class="sb-avatar-level">{{ levelLabel }}</span>
       </div>
@@ -457,7 +457,7 @@
       <Transition name="tt-pop">
         <div v-if="showMorph" class="tt-morph-overlay" @click="closeMorph">
           <div class="tt-morph-card">
-            <img v-if="morphImgOk" class="tt-morph-gif" :src="`/ultraman/seq/${ultraChar.key}/morph.gif`" :alt="ultraChar.name" @error="morphImgOk = false" />
+            <img v-if="morphImgOk" class="tt-morph-gif" :src="`./ultraman/seq/${ultraChar.key}/morph.gif`" :alt="ultraChar.name" @error="morphImgOk = false" />
             <div v-else class="tt-morph-emoji">🔥→🦸</div>
             <div class="tt-morph-text">{{ ultraChar.name }} 变身！</div>
             <div class="tt-morph-hint">点击关闭</div>

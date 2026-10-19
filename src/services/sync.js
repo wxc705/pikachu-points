@@ -3,7 +3,7 @@
 // 当前实现：Supabase（真云端，跨设备同步）
 // 未来：可以一行 import 切到 localStorage 模式（fallback）
 
-import { getAllCheckins, getAllRequests, getProjects, putCheckin, putProject, putExchangeRequest, getAllWeeklyTasks, putWeeklyTask, getAllDailyCheckins, putDailyCheckin, getDailyHomeworkAll, putDailyHomework, clearSyncDirty, setSyncDirtySuppressed } from './db.js'
+import { getAllCheckins, getAllRequests, getProjects, putCheckin, putProject, putExchangeRequest, getAllWeeklyTasks, putWeeklyTask, getAllDailyCheckins, putDailyCheckin, getDailyHomeworkAll, putDailyHomework, clearSyncDirty, setSyncDirtySuppressed, markSyncDirty } from './db.js'
 
 import { supabase, isSupabaseConfigured } from './supabase.js'
 import { SYNC_ENGINE, isSyncEngineConfigured, syncEngineClient } from './githubSync.js'
@@ -12,7 +12,7 @@ import { SYNC_ENGINE, isSyncEngineConfigured, syncEngineClient } from './githubS
 // 否则（dev / build:lan SAME_ORIGIN）走原 Supabase 路径，局域网垫片行为不变 ----
 const engine = syncEngineClient()
 const ENGINE_UNCONFIGURED_MSG = SYNC_ENGINE === 'github'
- ? 'GitHub 同步未配置：缺 VITE_GH_TOKEN / VITE_GH_REPO'
+ ? 'GitHub 同步未配置：先到「设置 → 云同步密钥」粘贴保存密钥（或构建时注入 VITE_GH_TOKEN / VITE_GH_REPO）'
  : 'Supabase 未配置：检查 .env'
 
 // ---- 状态订阅 ----
@@ -42,6 +42,68 @@ export function getSyncState() {
 
 // ---- 工具 ----
 function nowIso() { return new Date().toISOString() }
+
+// ==== 数据安全红线（t018）：pull 只能做并集合并，任何情况下都不得减少本地行 ====
+// 背景：空云端/读取失败若被当成"空表"去覆盖本地，等于账本被清零——数据毁灭级 bug。
+// 三道闸：① 云端该表为空或拉取失败 → 整表跳过，本地一个字节都不写；
+//        ② 合并全程只 put 不 delete；③ 收尾按表比对行数，任何表变少立即回滚快照并报错。
+const SYNC_TABLES = ['checkins', 'exchange_requests', 'projects', 'weekly_tasks', 'daily_homework', 'daily_checkins']
+
+function readAllTables() {
+  return Promise.all([
+    getAllCheckins(), getAllRequests(), getProjects(),
+    getAllWeeklyTasks(), getDailyHomeworkAll(), getAllDailyCheckins()
+  ]).then(([c, r, p, w, h, d]) => ({
+    checkins: c, exchange_requests: r, projects: p,
+    weekly_tasks: w, daily_homework: h, daily_checkins: d
+  }))
+}
+
+const PUT_BY_TABLE = {
+  checkins: putCheckin,
+  exchange_requests: putExchangeRequest,
+  projects: putProject,
+  weekly_tasks: putWeeklyTask,
+  daily_homework: putDailyHomework,
+  daily_checkins: putDailyCheckin
+}
+
+function countsOf(snap) {
+  const out = {}
+  for (const t of SYNC_TABLES) out[t] = (snap[t] || []).length
+  return out
+}
+
+// 空/失败 → 返回 null（调用方整表跳过）；有行才进合并
+function unionRows(cloudRows, table, skippedEmpty) {
+  if (!cloudRows || !cloudRows.length) {
+    skippedEmpty.push(table)
+    return null
+  }
+  return cloudRows
+}
+
+// 收尾闸：行数只增不减，发现变少 → 用 pull 前快照回滚该表，并把红线违规写进错误
+async function guardNoShrink(before, skippedEmpty) {
+  const after = await readAllTables()
+  const violations = []
+  for (const t of SYNC_TABLES) {
+    const b = (before[t] || []).length
+    const a = (after[t] || []).length
+    if (a < b) {
+      for (const row of before[t]) await PUT_BY_TABLE[t](row) // 回滚到 pull 前
+      violations.push(`${t}: ${b}→${a}（已回滚）`)
+    }
+  }
+  if (violations.length) {
+    const msg = `数据安全红线违规(pull 减行): ${violations.join('; ')}`
+    console.error('[sync][DATA-SAFETY] ' + msg)
+    markSyncDirty() // 回滚的行要补推上云（此刻仍在 suppressed 窗口内，由 finally 统一补标）
+    return { msg, before: countsOf(before), after: countsOf(before), skippedEmpty, restored: true }
+  }
+  return { msg: null, before: countsOf(before), after: countsOf(after), skippedEmpty, restored: false }
+}
+
 
 // ---- 核心接口 ----
 
@@ -213,9 +275,12 @@ export async function pull() {
  if (state.isSyncing) return state.lastResult
  state.isSyncing = true
  state.lastError = null
+ let guard = null // t018 数据安全闸（finally 里要用）
  notify()
  try {
  setSyncDirtySuppressed(true) // pull 回写期间抑制脏标（finally 里解除）
+ const before = await readAllTables()      // 快照：pull 前各表行数/行内容
+ const skippedEmpty = []                    // 云端为空或拉取失败而被整表跳过的表
 
  // 逐表拉取，表不存在/无权访问只记错误，不连坐其他表（核心打卡/兑换数据优先）
  const pullErrors = []
@@ -256,7 +321,7 @@ export async function pull() {
 
  const taskDayKeys = new Set(localCheckins.filter((x) => x.taskId).map((x) => x.date + '|' + x.taskId))
 
- for (const c of (cloudCheckins || [])) {
+ for (const c of (unionRows(cloudCheckins, 'checkins', skippedEmpty) || [])) { // 空云/失败 → 整表跳过
  const row = {
    id: c.id,
    projectId: c.project_id,
@@ -302,7 +367,7 @@ export async function pull() {
 
  // ---- requests 合并 ----
  const localRequestMap = new Map(localRequests.map((r) => [r.id, r]))
- for (const r of (cloudRequests || [])) {
+ for (const r of (unionRows(cloudRequests, 'exchange_requests', skippedEmpty) || [])) {
  const row = {
  id: r.id,
  reward: r.reward,
@@ -331,7 +396,7 @@ export async function pull() {
  // ---- projects 合并 ----
  // projects 是家长配置，用 updatedAt 做 last-write-wins（避免同步顺序把本地改动覆盖）
  const localProjectMap = new Map(localProjects.map((p) => [p.id, p]))
- for (const p of (cloudProjects || [])) {
+ for (const p of (unionRows(cloudProjects, 'projects', skippedEmpty) || [])) {
  const row = {
    id: p.id,
    category: p.category,
@@ -367,7 +432,7 @@ export async function pull() {
 
  const wtEq = (a, b) => a.weekday === b.weekday && a.timeSlot === b.timeSlot && a.name === b.name && a.points === b.points && a.category === b.category && a.sortOrder === b.sortOrder && !!a.isActive === !!b.isActive && (a.once || null) === (b.once || null) && JSON.stringify(a.skips || []) === JSON.stringify(b.skips || [])
 
- for (const t of (cloudWeeklyTasks || [])) {
+ for (const t of (unionRows(cloudWeeklyTasks, 'weekly_tasks', skippedEmpty) || [])) {
    const row = {
      id: t.id,
      weekday: t.weekday,
@@ -393,9 +458,9 @@ export async function pull() {
  // append-only 流水：按 id 并集，两台设备的打卡都保留，不覆盖不删
  const localDaily = await getAllDailyCheckins()
  const localDailyIds = new Set(localDaily.map((d) => d.id))
- const localDailyTaskKeys = new Set(localDaily.map((x) => x.date + '|' + x.task_id))
+ const localDailyTaskKeys = new Set(localDaily.map((x) => x.date + '|' + x.taskId)) // 本地行是 camelCase（task_id 恒 undefined → 防双记失效、跨设备同任务双记双算分）
 
- for (const d of (cloudDailyCheckins || [])) {
+ for (const d of (unionRows(cloudDailyCheckins, 'daily_checkins', skippedEmpty) || [])) {
    if (localDailyIds.has(d.id)) continue
    if (localDailyTaskKeys.has(d.date + '|' + d.task_id)) continue // 同日同任务已在本地(异id) → 防双记
 
@@ -416,10 +481,11 @@ export async function pull() {
 
  // ---- daily_homework 合并 (v4) ----
  // daily_homework 按 date 去重，同一天保留 createdAt 较新的
- if (cloudHomework && cloudHomework.length) {
+ const hwRows = unionRows(cloudHomework, 'daily_homework', skippedEmpty)
+ if (hwRows) {
    const localHomework = await getDailyHomeworkAll()
    const localHwMap = new Map(localHomework.map((h) => [h.date, h]))
-   for (const h of cloudHomework) {
+   for (const h of hwRows) {
      const row = {
        id: h.id,
        date: h.date,
@@ -443,8 +509,10 @@ export async function pull() {
  }
 
  const ts = nowIso()
+ guard = await guardNoShrink(before, skippedEmpty) // 数据安全闸：行数只增不减，变少即回滚+报错
+ if (guard.msg) state.lastError = guard.msg
  state.lastSyncedAt = ts
- state.lastResult = { pushed: 0, pulled, merged, errors: pullErrors, lastSyncedAt: ts }
+ state.lastResult = { pushed: 0, pulled, merged, errors: pullErrors, skippedEmpty: guard.skippedEmpty, guard: { before: guard.before, after: guard.after, shrunk: !!guard.restored }, lastSyncedAt: ts }
  return state.lastResult
 } catch (e) {
  state.lastError = e.message || String(e)
@@ -452,6 +520,7 @@ export async function pull() {
  throw e
 } finally {
  setSyncDirtySuppressed(false)
+ if (guard && guard.restored) markSyncDirty() // 回滚过的行补推上云（抑制解除后才标）
 
  state.isSyncing = false
  notify()

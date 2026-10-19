@@ -375,7 +375,25 @@ export async function deleteDailyHomework(id) {
 }
 
 export async function putDailyHomework(homework) {
-  markSyncDirty()
-  const db = await openDB()
-  return db.put('daily_homework', homework)
+ markSyncDirty()
+ const db = await openDB()
+ return db.put('daily_homework', homework)
+}
+
+// ----- t018c 重置为云端基线：显式清空积分账本（用户主动操作，绝不是同步副作用） -----
+// 只清「账本」四表：checkins / daily_checkins / exchange_requests / daily_homework。
+// 保留「配置」两表：projects（项目/奖品库）与 weekly_tasks（闯关课表）——那不是积分数据。
+// 云端基线 = 空（t018c 拍板：过往积分作废、不灌旧账）；两端各自重置后 pull 同一空基线，积分从 0 起步。
+// 逐表 clear 而非单事务：Safari 下 await 后同事务续请求有 auto-commit 坑，慢一步换稳。
+export async function clearLedgerData() {
+ markSyncDirty()
+ const db = await openDB()
+ const names = ['checkins', 'daily_checkins', 'exchange_requests', 'daily_homework']
+ const counts = {}
+ for (const name of names) {
+  const all = await db.getAll(name)
+  counts[name] = all.length
+  await db.clear(name)
+ }
+ return counts
 }

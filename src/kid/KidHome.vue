@@ -1,10 +1,13 @@
 <template>
   <div class="kid-page">
+    <!-- t019 主屏壁纸：今日角色三件套之一（ultraSeq 与今日视图同源），垫底不挡交互 -->
+    <div class="kid-wall" :style="{ backgroundImage: `url(./ultraman/seq/${ultraChar.key}/${ultraChar.wall})` }"></div>
+
     <!-- 顶部：奥特曼等级 + 连续打卡 -->
     <div class="kid-streak">
       <img
         v-if="ultramanLevel"
-        :src="`/ultraman/level${ultramanLevel}.png`"
+        :src="`./ultraman/level${ultramanLevel}.png`"
         class="kid-ultraman"
         alt="奥特曼"
       />
@@ -17,6 +20,12 @@
         <span v-if="ultramanLevel" class="kid-level-tag">{{ levelLabel }}</span>
       </div>
     </div>
+
+    <!-- t019：主屏 → 今日视图入口（今天视图仍是默认打卡流，这里只是让主屏可见） -->
+    <button class="kid-today-link" data-testid="today-entry-kidhome" @click="openToday">✅ 今日任务</button>
+
+    <!-- t019：主屏变身动画回看（壁纸 + 变身 GIF 三件套在主屏必须可见） -->
+    <button class="kid-morph-link" data-testid="morph-entry-kidhome" @click="openMorph">🎬 看变身动画</button>
 
     <button class="kid-map-link" data-testid="kg-entry-kidhome" @click="openMap">🗺️ 冒险地图</button>
 
@@ -87,6 +96,20 @@
       </Transition>
     </Teleport>
 
+    <!-- t019 主屏变身动画：与今日视图同一角色三件套（ultraSeq），主屏随时可看 -->
+    <Teleport to="body">
+      <Transition name="kid-pop">
+        <div v-if="showMorph" class="kid-morph-overlay" @click="closeMorph">
+          <div class="kid-morph-card">
+            <img v-if="morphImgOk" class="kid-morph-gif" :src="`./ultraman/seq/${ultraChar.key}/morph.gif`" :alt="ultraChar.name" @error="morphImgOk = false" />
+            <div v-else class="kid-morph-emoji">🔥→🦸</div>
+            <div class="kid-morph-text">{{ ultraChar.name }} 变身！</div>
+            <div class="kid-morph-hint">点击关闭</div>
+          </div>
+        </div>
+      </Transition>
+    </Teleport>
+
     <CoinBurst v-if="coinBurst" :x="coinBurst.x" :y="coinBurst.y" @done="coinBurst = null" />
   </div>
 </template>
@@ -97,6 +120,7 @@ import { useRouter } from 'vue-router'
 import { usePointsStore } from '../stores/points.js'
 import { isSyncEngineConfigured } from '../services/githubSync.js'
 import { playCoin, unlockAudio } from '../services/sound.js'
+import { getCharToday } from '../services/ultraSeq.js'
 import CoinBurst from '../components/CoinBurst.vue'
 import './kid-style.css'
 
@@ -104,6 +128,21 @@ const store = usePointsStore()
 const router = useRouter()
 function openMap() {
   router.push('/map')
+}
+// t019: 主屏「今日任务」→ 今日视图（默认打卡流），/kid 不再无条件跳走
+function openToday() {
+  router.push('/kid/today')
+}
+
+// t019: 主屏三件套 —— 壁纸 + 变身动画（与今日视图同源：ultraSeq 今日角色）
+const ultraChar = ref(getCharToday())
+const showMorph = ref(false)
+const morphImgOk = ref(true)
+function openMorph() {
+  showMorph.value = true
+}
+function closeMorph() {
+  showMorph.value = false
 }
 
 const goals = ref([])

@@ -28,6 +28,7 @@ import {
   deleteCheckin,
   deleteDailyCheckin,
   putCheckin,
+  clearLedgerData,
 
   isSyncDirty
 
@@ -850,9 +851,25 @@ export const usePointsStore = defineStore('points', () => {
  }
 
  function clearCloud() {
- syncClearCloud()
- lastSyncedAt.value = null
- lastSyncResult.value = null
+  syncClearCloud()
+  lastSyncedAt.value = null
+  lastSyncResult.value = null
+ }
+
+ // t018c：重置为云端基线——显式清零本机积分账本（用户主动操作，二次确认后调用）
+ // 语义：只清「账本」四表（checkins/daily_checkins/exchange_requests/daily_homework），
+ //       保留「配置」两表（projects/weekly_tasks）；连胜(ultra-char)与里程碑状态一并归零。
+ // 与数据安全红线的关系：红线拦的是 pull 副作用清数据；这是用户显式指令，不走 pull、不碰云端。
+ async function resetToCloudBaseline() {
+  const counts = await clearLedgerData()
+  // 连胜/变身指针（localStorage）归零——积分从 0 起步，进度条也不留旧账
+  try { localStorage.removeItem('pikachu-points:ultra-char') } catch (e) { /* 静默 */ }
+  try { localStorage.removeItem(MILESTONE_KEY) } catch (e) { /* 静默 */ }
+  morphDays.value = getMorphDays()
+  reachedMilestones.value = new Set()
+  pendingMilestone.value = null
+  await refresh()
+  return counts
  }
 
  // 监听 totalPoints：跨过新阈值时弹一次
@@ -934,6 +951,7 @@ export const usePointsStore = defineStore('points', () => {
  syncPullFromCloud,
  syncBothWays,
  clearCloud,
+ resetToCloudBaseline,
  // v4: 每日学校作业
  dailyHomework,
  todayHomework,

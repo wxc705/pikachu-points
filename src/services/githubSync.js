@@ -2,17 +2,33 @@
 // 契约与 supabase-js 的最小用法对齐：client.from(table).upsert(rows,{onConflict}) / .select('*')
 // sync.js 通过 syncEngineClient()/isSyncEngineConfigured() 二选一，push/pull/脏标/防双记逻辑零改动。
 // 硬约束：只走 api.github.com（raw.githubusercontent.com 国内被墙，禁用）；CORS 由 GitHub API 支持。
-// token 只从构建期环境变量 VITE_GH_TOKEN 注入，不写源码、不落日志、不进 commit。
+// token 来源（t019 架构修正）：构建期 VITE_GH_TOKEN（env 优先，E2E/内网用）
+// → 运行时 localStorage `pk_gh_token`（家长端「设置」页录入，公开仓部署的唯一正解）。
+// 铁律：token 永远不进构建产物——公开仓里任何有效密钥会被 GitHub secret scanning
+// 数十秒内自动吊销，烤进 dist 的 token 活不过一次部署（线上同步恒 401）。
 
 import { supabase, isSupabaseConfigured } from './supabase.js'
 
 export const SYNC_ENGINE = import.meta.env.VITE_SYNC_ENGINE || ''
-const GH_TOKEN = import.meta.env.VITE_GH_TOKEN || ''
+export const GH_TOKEN_KEY = 'pk_gh_token'
 const GH_REPO = import.meta.env.VITE_GH_REPO || '' // 形如 wxc705/pikachu-data
 const API = 'https://api.github.com'
 
+// 每次请求时现读（不缓存）：设置页保存密钥后无需刷新页面立即可用
+export function getGithubToken() {
+  const env = import.meta.env.VITE_GH_TOKEN || ''
+  if (env) return env
+  try { return localStorage.getItem(GH_TOKEN_KEY) || '' } catch (e) { return '' }
+}
+export function setGithubToken(v) {
+  try { localStorage.setItem(GH_TOKEN_KEY, String(v || '').trim()) } catch (e) {}
+}
+export function clearGithubToken() {
+  try { localStorage.removeItem(GH_TOKEN_KEY) } catch (e) {}
+}
+
 export function isGithubConfigured() {
-  return SYNC_ENGINE === 'github' && !!GH_TOKEN && !!GH_REPO
+  return SYNC_ENGINE === 'github' && !!getGithubToken() && !!GH_REPO
 }
 
 // 引擎可用性判断（取代 sync/KidHome 里的 isSupabaseConfigured）
@@ -29,7 +45,7 @@ export function syncEngineClient() {
 // ---- 底层 REST ----
 function ghHeaders(accept) {
   return {
-    'Authorization': 'Bearer ' + GH_TOKEN,
+    'Authorization': 'Bearer ' + getGithubToken(),
     'Accept': accept,
     'X-GitHub-Api-Version': '2022-11-28'
   }
@@ -124,7 +140,12 @@ async function upsert(table, rows) {
       if (s.sha) {
         const cur = await getTableRaw(table)
         if (cur.error) return { error: cur.error }
-        cloud = cur.rows || {}
+        if (cur.rows == null) {
+          // 数据安全红线（t018）：已知云端有文件（拿到 sha）却读不出内容 → 绝不能当空表覆盖，
+          // 否则一次读取抖动就把云端账本清成本地这几行。
+          return { error: errObj(`tables/${table}.json: 云端文件存在(sha=${String(s.sha).slice(0, 7)}…)但读取为空，拒绝覆盖（数据安全红线）`) }
+        }
+        cloud = cur.rows
       }
       const merged = mergeById(cloud, rows)
       const put = await putTable(table, merged, s.sha, `sync(${table}): upsert ${rows.length} rows`)
