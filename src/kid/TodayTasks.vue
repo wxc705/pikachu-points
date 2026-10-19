@@ -56,7 +56,7 @@
         <div style="text-align:right">
           <div class="tt-tb-right">当前：<span class="tt-tb-slot">{{ currentTimelineSlot.label }}</span></div>
           <div v-if="nextTimelineSlot" class="tt-tb-next">下一个：{{ nextTimelineSlot.label }} · 还有 {{ minutesUntilNext }} 分钟</div>
-          <div v-else class="tt-tb-next tt-tb-done">今天的任务都完成啦！</div>
+          <div v-else-if="dailyTotal > 0 && dailyDone === dailyTotal" class="tt-tb-next tt-tb-done">今天的任务都完成啦！</div>
         </div>
       </div>
 
@@ -67,7 +67,7 @@
           <span v-if="dailyTotal">{{ dailyDone }} / {{ dailyTotal }} 完成</span>
           <span v-else>今天没有任务</span>
         </div>
-        <div class="tt-xp-track" @click="debugTriggerMorph" style="cursor:pointer" title="点击触发变身（调试入口）">
+        <div class="tt-xp-track">
           <div class="tt-xp-fill" :style="{ width: dailyProgress + '%' }"></div>
         </div>
       </div>
@@ -116,7 +116,10 @@
                   <div class="tt-task-emoji">{{ emojiForName(task.name) }}</div>
                   <div class="tt-task-info">
                     <div class="tt-task-name">{{ task.name }}</div>
-                    <div class="tt-task-meta"><span class="xp-tag">+{{ task.points }} 变身进度</span></div>
+                    <div class="tt-task-meta">
+                      <span v-if="task.subject" class="subj-tag">{{ task.subject }}</span>
+                      <span class="xp-tag">+{{ task.points }} 变身进度</span>
+                    </div>
                   </div>
                   <button class="tt-btn" :class="task.done ? 'is-done' : 'is-go'" :disabled="task.done || busy.has(task.key)">
                     <span class="tt-btn-icon">
@@ -500,6 +503,11 @@ const bubbleEmoji = ref('⭐')
 const bubbleTrigger = ref(0)
 const showAllDone = ref(false)
 let _allDoneFired = false // 同一天只弹一次
+// 跨日重置全勤标记：第二天仍可再次庆祝（变身标记由 dailyProgress watch 单独管理）
+watch(() => store.today, () => {
+  _allDoneFired = false
+  showAllDone.value = false
+})
 
 // v4: 积分商城
 const showWishInput = ref(false)
@@ -534,8 +542,6 @@ async function importWeeklySchedule() {
 const ultraChar = getCharToday()
 const showMorph = ref(false)
 const morphImgOk = ref(true)
-// 调试入口：点击 XP 进度条也触发变身（方便验收，生产可移除）
-function debugTriggerMorph() { triggerMorph() }
 function triggerMorph() {
   if (showMorph.value) return
   showMorph.value = true
@@ -899,13 +905,12 @@ function onCancel() {
   confirmTask.value = null
 }
 
-// v4: 全勤检测
+// v4: 全勤检测（两栏都有任务且都完成才庆祝）
 function checkAllDone() {
   if (_allDoneFired) return
   const hwAllDone = store.todayHomework.length > 0 && store.todayHomework.every((t) => t.done)
   const expAllDone = store.todayTasks.length > 0 && store.todayTasks.every((t) => isDone(t))
-  // 至少有一区有任务且全部完成
-  if ((hwAllDone || expAllDone) && (store.todayHomework.length + store.todayTasks.length > 0)) {
+  if (hwAllDone && expAllDone) {
     _allDoneFired = true
     const msg = speakAllDone()
     bubbleText.value = msg
@@ -1174,6 +1179,7 @@ onBeforeUnmount(() => {
 .tt-task-name { font-size:16px;font-weight:700;color:#1a1a2e;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0 }
 .tt-task-meta { font-size:12px;font-weight:700;color:#94a3b8;margin-top:2px }
 .tt-task-meta .xp-tag { color:#6366f1 }
+.tt-task-meta .subj-tag { display:inline-flex; align-items:center; padding:3px 11px; margin-right:6px; border-radius:999px; background:#e0e7ff; color:#4338ca; font-size:15px; font-weight:900; line-height:1.3; vertical-align:middle }
 .tt-task-meta .pt-tag { color:#d97706 }
 .tt-btn { padding:16px 28px;border-radius:20px;border:none;font-size:17px;font-weight:900;cursor:pointer;font-family:inherit;color:#fff;transition:all .2s cubic-bezier(.34,1.56,.64,1);position:relative;overflow:hidden;letter-spacing:.3px;display:inline-flex;align-items:center;gap:8px }
 .tt-btn::before { content:'';position:absolute;top:0;left:0;right:0;height:50%;background:linear-gradient(180deg,rgba(255,255,255,.28),transparent);border-radius:20px 20px 0 0;pointer-events:none }

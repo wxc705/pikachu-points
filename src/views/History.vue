@@ -48,7 +48,7 @@
 
 <script setup>
 import { computed, onMounted } from 'vue'
-import { usePointsStore } from '../stores/points.js'
+import { usePointsStore, isPointEarning } from '../stores/points.js'
 
 const store = usePointsStore()
 
@@ -69,13 +69,16 @@ function formatCategory(c) {
 const merged = computed(() => {
   const items = []
   for (const c of store.checkins) {
+    const earning = isPointEarning(c)
     items.push({
       _k: `c-${c.id}`,
       date: c.date,
       ts: c.createdAt || 0,
       title: c.projectName || '打卡',
       sub: formatCategory(c.category),
-      delta: (c.pointsEarned >= 0 ? '+' : '') + (c.pointsEarned || 0),
+      delta: earning
+        ? (c.pointsEarned >= 0 ? '+' : '') + (c.pointsEarned || 0)
+        : `+${c.pointsEarned || 0} 变身进度`,
       tone: c.pointsEarned >= 0 ? 'text-secondary' : 'text-secondary'
     })
   }

@@ -109,9 +109,12 @@
       <!-- 已有作业展示 -->
       <div v-if="store.todayHomework.length && !hwEditing" class="space-y-2">
         <ul class="space-y-1.5 text-sm">
-          <li v-for="t in store.todayHomework" :key="t.key" class="flex items-center justify-between py-1">
-            <span :class="t.done ? 'line-through text-ink-soft' : ''">{{ t.name }}</span>
-            <span class="text-secondary font-bold">+{{ t.points }} {{ t.done ? '✓' : '' }}</span>
+          <li v-for="t in store.todayHomework" :key="t.key" class="flex items-center justify-between gap-2 py-1">
+            <span class="flex items-center gap-1.5 min-w-0" :class="t.done ? 'line-through text-ink-soft' : ''">
+              <span class="truncate">{{ t.name }}</span>
+              <span v-if="t.subject" class="shrink-0 text-xs font-bold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-600">{{ t.subject }}</span>
+            </span>
+            <span class="text-secondary font-bold whitespace-nowrap">+{{ t.points }} 变身进度 {{ t.done ? '✓' : '' }}</span>
           </li>
         </ul>
         <button @click="hwEditing = true" class="w-full py-2 rounded-xl bg-primary-soft/70 text-ink text-xs font-semibold hover:bg-primary transition-colors btn-press">
@@ -256,7 +259,10 @@ async function onPull() {
   syncMsg.value = ''
   try {
     const r = await store.syncPullFromCloud()
-    syncMsg.value = r.pulled > 0 ? `✅ 拉取 ${r.pulled} 条` : '云端无新数据'
+    const parts = []
+    if (r.pulled > 0) parts.push(`新增 ${r.pulled}`)
+    if (r.merged > 0) parts.push(`更新 ${r.merged}`)
+    syncMsg.value = parts.length ? `✅ 拉取：${parts.join(' / ')} 条` : '云端无新数据'
     setTimeout(() => (syncMsg.value = ''), 3000)
   } catch (e) { syncMsg.value = `❌ 拉取失败：${e.message}` }
 }

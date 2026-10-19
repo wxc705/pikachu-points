@@ -189,7 +189,7 @@
 
 <script setup>
 import { computed, onMounted, ref } from 'vue'
-import { usePointsStore } from '../stores/points.js'
+import { usePointsStore, isPointEarning } from '../stores/points.js'
 import { getWeekRange, getActiveProjects } from '../services/db.js'
 
 const store = usePointsStore()
@@ -234,14 +234,16 @@ async function generate() {
  const activeDays = weekDays.slice(0, endIdx + 1)
 
  const weekCheckins = store.checkins.filter((c) => activeDays.includes(c.date))
+ // 积分口径与 store 一致：学校作业只算变身进度，不进「本周新增」及各项积分求和
+ const pointCheckins = weekCheckins.filter(isPointEarning)
  const weekRequests = store.requests.filter((r) => activeDays.includes(r.date) && r.status === 'approved')
 
- const weekEarned = weekCheckins.reduce((s, c) => s + (c.pointsEarned || 0), 0)
+ const weekEarned = pointCheckins.reduce((s, c) => s + (c.pointsEarned || 0), 0)
  const weekSpent = weekRequests.reduce((s, r) => s + (r.pointsCost || 0), 0)
 
  // 7 天柱状图数据：每天的净增（earned - spent）
  const dailyBars = weekDays.slice(0, endIdx + 1).map((date) => {
- const dayEarned = weekCheckins.filter((c) => c.date === date).reduce((s, c) => s + c.pointsEarned, 0)
+ const dayEarned = pointCheckins.filter((c) => c.date === date).reduce((s, c) => s + c.pointsEarned, 0)
  const daySpent = weekRequests.filter((r) => r.date === date).reduce((s, r) => s + r.pointsCost, 0)
  const net = dayEarned - daySpent
  const d = new Date(date + 'T00:00:00').getDay()
@@ -258,7 +260,7 @@ async function generate() {
  let intensity = 0
  if (count >= 3) intensity = 3
  else if (count >= 1) intensity = count
- const net = weekCheckins.filter((c) => c.date === date).reduce((s, c) => s + c.pointsEarned, 0)
+ const net = pointCheckins.filter((c) => c.date === date).reduce((s, c) => s + c.pointsEarned, 0)
  - weekRequests.filter((r) => r.date === date).reduce((s, r) => s + r.pointsCost, 0)
  return { date, label: DAY_LABS_DAY(d), intensity, net }
  })
@@ -279,7 +281,7 @@ async function generate() {
 
  // 分类统计
  const catMap = new Map()
- for (const c of weekCheckins) {
+ for (const c of pointCheckins) {
  const k = c.category || '其他'
  catMap.set(k, (catMap.get(k) || 0) + (c.pointsEarned || 0))
  }
@@ -292,7 +294,7 @@ async function generate() {
 
  // 本周最佳
  const projMap = new Map()
- for (const c of weekCheckins) {
+ for (const c of pointCheckins) {
  if (!c.projectId) continue
  const k = c.projectId
  if (!projMap.has(k)) projMap.set(k, { name: c.projectName || '未知', points: 0, count: 0 })
@@ -303,7 +305,7 @@ async function generate() {
  const topProject = [...projMap.values()].sort((a, b) => b.points - a.points)[0] || null
 
  // 学习效果平均
- const ratings = weekCheckins.filter((c) => c.category === '评价' && c.projectName && c.projectName.includes('学习效果'))
+ const ratings = pointCheckins.filter((c) => c.category === '评价' && c.projectName && c.projectName.includes('学习效果'))
  const ratingAvg = ratings.length ? ratings.reduce((s, r) => s + r.pointsEarned, 0) / ratings.length : null
  const ratingCount = ratings.length
 

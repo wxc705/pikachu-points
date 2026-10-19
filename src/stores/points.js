@@ -9,7 +9,6 @@ import {
   getProjects as dbGetProjects,
   addProject as dbAddProject,
   updateProject as dbUpdateProject,
-  setProjectActive as dbSetProjectActive,
   deleteProject as dbDeleteProject,
   getAllWeeklyPlans as dbGetAllWeeklyPlans,
   setWeeklyPlan as dbSetWeeklyPlan,
@@ -42,6 +41,12 @@ import { getCharToday, markMorphToday, getMorphDays } from '../services/ultraSeq
 const MILESTONES = [100, 500, 1000, 5000]
 const MILESTONE_KEY = 'pikachu-points:reached-milestones'
 const THEME_KEY = 'pikachu-points:theme-id'
+
+// 学校作业不计入积分（只算变身进度）——QC 2026-09-23 拍板规则
+// 单一口径：todayEarned / totalEarned / 周报 / 历史必须复用本函数
+export function isPointEarning(c) {
+  return c.category !== '学校'
+}
 
 function loadReached() {
   try {
@@ -122,10 +127,11 @@ export const usePointsStore = defineStore('points', () => {
  return m
  })
 
- // 学校作业不计入积分（只算变身进度）——QC 2026-09-23 拍板修正既定规则的落地漏洞
+ // 学校作业不计入积分（只算变身进度）——QC 2026-09-23 拍板规则
+ // 统一口径：所有积分统计复用 isPointEarning，禁止各自写 category !== '学校'
  const totalEarned = computed(() =>
   checkins.value
-   .filter((c) => c.category !== '学校')
+   .filter(isPointEarning)
    .reduce((s, c) => s + (c.pointsEarned || 0), 0)
  )
 
@@ -140,7 +146,7 @@ export const usePointsStore = defineStore('points', () => {
 
  const todayEarned = computed(() =>
  checkins.value
- .filter((c) => c.date === today.value)
+ .filter((c) => c.date === today.value && isPointEarning(c))
  .reduce((s, c) => s + (c.pointsEarned ||0),0)
  )
 
@@ -222,7 +228,7 @@ export const usePointsStore = defineStore('points', () => {
  date: today.value,
  createdAt: Date.now()
  }
- await dbAddCheckin(entry)
+ entry.id = await dbAddCheckin(entry)
  checkins.value = [...checkins.value, entry]
  return entry
  }
@@ -238,7 +244,7 @@ export const usePointsStore = defineStore('points', () => {
  date: today.value,
  createdAt: Date.now()
  }
- await dbAddCheckin(entry)
+ entry.id = await dbAddCheckin(entry)
  checkins.value = [...checkins.value, entry]
  return entry
  }
@@ -255,7 +261,7 @@ export const usePointsStore = defineStore('points', () => {
    date: today.value,
    createdAt: Date.now()
   }
-  await dbAddCheckin(entry)
+  entry.id = await dbAddCheckin(entry)
   checkins.value = [...checkins.value, entry]
   return entry
  }
@@ -273,7 +279,7 @@ export const usePointsStore = defineStore('points', () => {
    date: today.value,
    createdAt: Date.now()
   }
-  await dbAddCheckin(entry)
+  entry.id = await dbAddCheckin(entry)
   checkins.value = [...checkins.value, entry]
   return entry
  }
@@ -297,7 +303,8 @@ export const usePointsStore = defineStore('points', () => {
   }
 
  async function updateRequest(id, patch) {
-   const next = await dbUpdateRequest(id, patch)
+   // 审批/已读状态变化必须刷新 updatedAt，否则同步按 createdAt 判新旧 → 孩子端永远待审核
+   const next = await dbUpdateRequest(id, { ...patch, updatedAt: Date.now() })
    if (next) {
      requests.value = requests.value.map((r) => (r.id === id ? next : r))
    }
@@ -321,7 +328,7 @@ export const usePointsStore = defineStore('points', () => {
  }
 
  async function updateProjectItem(id, patch) {
-   const next = await dbUpdateProject(id, patch)
+   const next = await dbUpdateProject(id, { ...patch, updatedAt: Date.now() })
    if (next) {
      projects.value = projects.value.map((p) => (p.id === id ? next : p))
    }
@@ -331,7 +338,7 @@ export const usePointsStore = defineStore('points', () => {
  async function toggleProjectActive(id) {
    const p = projects.value.find((p) => p.id === id)
    if (!p) return null
-   const next = await dbSetProjectActive(id, !p.isActive)
+   const next = await dbUpdateProject(id, { isActive: !p.isActive, updatedAt: Date.now() })
    if (next) {
      projects.value = projects.value.map((x) => (x.id === id ? next : x))
    }
@@ -421,7 +428,7 @@ export const usePointsStore = defineStore('points', () => {
    for (const t of weeklyTasks.value) {
      const fix = SEED_FIXES.find((f) => f.match(t))
      if (fix) {
-       await dbUpdateWeeklyTask(t.id, { ...fix.patch })
+       await dbUpdateWeeklyTask(t.id, { ...fix.patch, updatedAt: Date.now() })
        changed = true
      }
    }
@@ -440,7 +447,7 @@ export const usePointsStore = defineStore('points', () => {
   return id
  }
  async function updateWeeklyTaskItem(id, patch) {
-  await dbUpdateWeeklyTask(id, patch)
+  await dbUpdateWeeklyTask(id, { ...patch, updatedAt: Date.now() })
   weeklyTasks.value = await dbGetAllWeeklyTasks()
  }
  async function deleteWeeklyTaskItem(id) {
@@ -537,7 +544,7 @@ export const usePointsStore = defineStore('points', () => {
    const hwIdx = parseInt(task.id.split(':')[2], 10)
    if (isNaN(hwIdx) || !entry.tasks[hwIdx] || entry.tasks[hwIdx].done) return null
    entry.tasks[hwIdx].done = true
-   await dbUpdateDailyHomework(entry.id, { tasks: entry.tasks })
+   await dbUpdateDailyHomework(entry.id, { tasks: entry.tasks, updatedAt: Date.now() })
    dailyHomework.value = [...dailyHomework.value]
    const checkinEntry = {
     projectId: null,
@@ -558,13 +565,17 @@ export const usePointsStore = defineStore('points', () => {
   // 家长端：写入今日学校作业（追加模式，同名任务不重复）
   async function saveTodayHomework(tasks) {
    const existing = dailyHomework.value.find((h) => h.date === today.value)
-   let mergedTasks = tasks.map((t) => ({
-    name: t.name,
-    points: t.points || 2,
-    done: false
-   }))
+   // 新行只写有值的字段：subject/minutes/note 缺省不落键，老行 {name,points,done} 零迁移
+   const buildTask = (t) => {
+    const row = { name: t.name, points: t.points || 2, done: false }
+    if (t.subject != null && String(t.subject).trim()) row.subject = String(t.subject).trim()
+    if (t.minutes != null && t.minutes !== '') row.minutes = t.minutes
+    if (t.note != null && String(t.note).trim()) row.note = String(t.note).trim()
+    return row
+   }
+   let mergedTasks = tasks.map(buildTask)
    if (existing && existing.tasks) {
-    // 追加：已有任务保留（含 done 状态），新任务按名去重追加
+    // 追加：已有任务整行保留（含 done 与 subject/minutes/note），新任务按名去重追加
     const existingNames = new Set(existing.tasks.map((t) => t.name))
     const newTasks = mergedTasks.filter((t) => !existingNames.has(t.name))
     mergedTasks = [...existing.tasks, ...newTasks]
@@ -572,7 +583,8 @@ export const usePointsStore = defineStore('points', () => {
    const payload = {
     date: today.value,
     tasks: mergedTasks,
-    source: '家长录入'
+    source: '家长录入',
+    updatedAt: Date.now()
    }
    if (existing) {
     const next = await dbUpdateDailyHomework(existing.id, payload)
@@ -598,7 +610,7 @@ export const usePointsStore = defineStore('points', () => {
     let entry
     if (existing) {
       const tasks = [...(existing.tasks || []), { name: clean, points: 1, done: false }]
-      entry = await dbUpdateDailyHomework(existing.id, { tasks })
+      entry = await dbUpdateDailyHomework(existing.id, { tasks, updatedAt: Date.now() })
       if (!entry) entry = { ...existing, tasks }
       dailyHomework.value = dailyHomework.value.map((h) => (h.id === existing.id ? entry : h))
     } else {
@@ -658,7 +670,7 @@ export const usePointsStore = defineStore('points', () => {
     } else {
       const skips = new Set(task.skips || [])
       skips.add(today.value)
-      const patchRow = { skips: [...skips] }
+      const patchRow = { skips: [...skips], updatedAt: Date.now() }
       const next = await dbUpdateWeeklyTask(task.id, patchRow)
       weeklyTasks.value = weeklyTasks.value.map((t) => (t.id === task.id ? (next || { ...t, ...patchRow }) : t))
     }
@@ -676,11 +688,11 @@ export const usePointsStore = defineStore('points', () => {
     for (const c of checkins.value.filter(hitC)) await deleteCheckin(c.id)
     checkins.value = checkins.value.filter((c) => !hitC(c))
     const tasks = entry.tasks.filter((_, i) => i !== idx)
-    const next = await dbUpdateDailyHomework(entry.id, { tasks })
+    const next = await dbUpdateDailyHomework(entry.id, { tasks, updatedAt: Date.now() })
     dailyHomework.value = dailyHomework.value.map((h) => (h.id === entry.id ? (next || { ...entry, tasks }) : h))
     const shifted = checkins.value.filter((c) => c.date === today.value && c.homeworkId === entry.id && c.homeworkIndex > idx)
     for (const c of shifted) {
-      const updated = { ...c, homeworkIndex: c.homeworkIndex - 1 }
+      const updated = { ...c, homeworkIndex: c.homeworkIndex - 1, updatedAt: Date.now() }
       await putCheckin(updated)
       checkins.value = checkins.value.map((x) => (x.id === c.id ? updated : x))
     }
@@ -840,7 +852,7 @@ export const usePointsStore = defineStore('points', () => {
 
  async function syncPullFromCloud() {
  const r = await syncPull()
- if (r.pulled > 0) await refresh()
+ if (r.pulled > 0 || r.merged > 0) await refresh()
  return r
  }
 
