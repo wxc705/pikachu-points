@@ -6,16 +6,19 @@
           <Zap class="w-5 h-5" :stroke-width="2.5" />
           皮卡丘积分
         </router-link>
-        <nav class="flex gap-0.5 text-xs overflow-x-auto">
+        <nav class="flex gap-0 sm:gap-0.5 text-xs overflow-x-auto" aria-label="主导航">
           <router-link
             v-for="link in links"
             :key="link.to"
             :to="link.to"
-            class="px-2.5 py-1.5 rounded-full hover:bg-primary-soft flex items-center gap-1 transition-colors"
+            :title="link.label"
+            :aria-label="link.label"
+            class="px-1 sm:px-2.5 py-1.5 rounded-full hover:bg-primary-soft flex flex-col sm:flex-row items-center gap-0.5 sm:gap-1 transition-colors"
             active-class="bg-white/60 font-semibold shadow-sm"
           >
-            <component :is="link.icon" class="w-3.5 h-3.5" :stroke-width="2" />
-            <span class="hidden sm:inline">{{ link.label }}</span>
+            <component :is="link.icon" class="w-3.5 h-3.5 shrink-0" :stroke-width="2" />
+            <!-- E2：手机（<640px）图标下方也显示 2 字小标签，设置项肉眼可认；sm 以上恢复右置文字 -->
+            <span class="text-[10px] leading-none sm:text-xs sm:leading-normal whitespace-nowrap">{{ link.label }}</span>
           </router-link>
         </nav>
       </div>

@@ -14,6 +14,40 @@
       </div>
     </section>
 
+    <!-- E1：云同步密钥状态入口（页面顶部显著位置；手机上一眼能看到，点进设置粘贴） -->
+    <section
+      v-if="!hasGhToken"
+      data-testid="gh-token-banner"
+      data-gh-token-state="missing"
+      role="status"
+      class="rounded-2xl bg-amber-50 border border-amber-200 shadow-sm p-3.5 flex flex-col sm:flex-row sm:items-center gap-2.5"
+    >
+      <p class="flex-1 text-sm font-semibold text-amber-800 leading-snug">🔐 云同步密钥未录入 —— 跨设备同步不可用</p>
+      <router-link
+        to="/settings"
+        data-testid="gh-token-cta"
+        class="inline-flex items-center justify-center shrink-0 min-h-[44px] px-4 rounded-xl bg-amber-400 hover:bg-amber-300 text-amber-950 text-sm font-bold btn-press transition-colors"
+      >
+        去设置粘贴
+      </router-link>
+    </section>
+    <section
+      v-else
+      data-testid="gh-token-banner"
+      data-gh-token-state="saved"
+      role="status"
+      class="rounded-2xl bg-green-50 border border-green-200 shadow-sm p-3.5 flex flex-col sm:flex-row sm:items-center gap-2.5"
+    >
+      <p class="flex-1 text-sm font-semibold text-green-700 leading-snug">🔐 云同步密钥已录入（本机）</p>
+      <router-link
+        to="/settings"
+        data-testid="gh-token-manage"
+        class="inline-flex items-center justify-center shrink-0 min-h-[44px] px-4 rounded-xl bg-green-500 hover:bg-green-600 text-white text-sm font-bold btn-press transition-colors"
+      >
+        管理
+      </router-link>
+    </section>
+
     <!-- C2：🚗 接送安排（今日 pickupNote 汇总；无值不编造，显示待填写） -->
     <section class="rounded-2xl bg-surface shadow-sm p-4 space-y-2" data-testid="pickup-card">
       <h2 class="font-bold text-sm flex items-center gap-1.5">🚗 接送安排</h2>
@@ -246,15 +280,24 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { usePointsStore } from '../stores/points.js'
 import { playError, playCoin } from '../services/sound.js'
 import { useExchangeDecide } from '../composables/useExchangeDecide.js'
+import { GH_TOKEN_KEY } from '../services/githubSync.js'
 import { CheckCircle2, Star, Gift, Clock, Upload, Download, RefreshCw, Cloud } from 'lucide-vue-next'
 
 const store = usePointsStore()
+const route = useRoute()
 const { decide } = useExchangeDecide()
 const syncMsg = ref('')
+// E1：密钥状态只看本机 localStorage（不读环境变量 token），返回本页时重读
+const hasGhToken = ref(false)
+function refreshGhTokenState() {
+  try { hasGhToken.value = Boolean((localStorage.getItem(GH_TOKEN_KEY) || '').trim()) }
+  catch (e) { hasGhToken.value = false }
+}
 // t018c：重置为云端基线（0=关 1=后果说明 2=打字确认）
 const resetStep = ref(0)
 const resetConfirmText = ref('')
@@ -484,5 +527,8 @@ async function saveHomework() {
   }
 }
 
-onMounted(() => { store.load() })
+onMounted(() => { store.load(); refreshGhTokenState() })
+
+// 从 /settings 返回时刷新（本页未用 keep-alive，返回会重新挂载；watch 作为兜底覆盖同页路由变化）
+watch(() => route.path, (p) => { if (p === '/parent') refreshGhTokenState() })
 </script>
