@@ -21,7 +21,77 @@ jobs:
           cache: npm
 
       - run: npm ci
-      - run: npm run build
+      - run: npm run build:cloud
+
+      - name: Assert cloud build artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+
+          INDEX_FILES=(dist/assets/index-*.js)
+          if [ "${#INDEX_FILES[@]}" -eq 0 ]; then
+            echo "::error::构建产物为空：dist/assets/index-*.js 不存在"
+            exit 1
+          fi
+          for f in "${INDEX_FILES[@]}"; do
+            cat "$f"
+            printf '\n'
+          done > /tmp/index-bundle.js
+
+          # grep 无匹配时退出码为 1，用 || true 避免 set -e 提前中断
+          count_in() { { grep -aoF "$1" "$2" 2>/dev/null || true; } | wc -l | tr -d ' '; }
+          count_dist() { { grep -raoF "$1" dist 2>/dev/null || true; } | wc -l | tr -d ' '; }
+
+          # 阳性对照：产物非空且确实是 GitHub 引擎
+          API_INDEX=$(count_in 'api.github.com' /tmp/index-bundle.js)
+          if [ "$API_INDEX" -eq 0 ]; then
+            echo "::error::构建产物为空或口味错误：dist/assets/index-*.js 中 api.github.com = 0"
+            exit 1
+          fi
+          API_DIST=$(count_dist 'api.github.com')
+          if [ "$API_DIST" -eq 0 ]; then
+            echo "::error::构建产物为空：dist/ 中 api.github.com = 0"
+            exit 1
+          fi
+          echo "PASS index-*.js api.github.com = $API_INDEX (>0，阳性对照)"
+          echo "PASS dist/ api.github.com = $API_DIST (>0，阳性对照)"
+
+          FAIL=0
+
+          for NEEDLE in 'sb_publishable' 'supabase.co'; do
+            N=$(count_in "$NEEDLE" /tmp/index-bundle.js)
+            if [ "$N" -ne 0 ]; then
+              echo "FAIL index-*.js $NEEDLE = $N (要求 0，旧 Supabase 口味)"
+              FAIL=1
+            else
+              echo "PASS index-*.js $NEEDLE = 0"
+            fi
+          done
+
+          for NEEDLE in 'github_pat_' 'ghp_'; do
+            N=$(count_dist "$NEEDLE")
+            if [ "$N" -ne 0 ]; then
+              echo "FAIL dist/ $NEEDLE = $N (要求 0，密钥泄漏)"
+              FAIL=1
+            else
+              echo "PASS dist/ $NEEDLE = 0"
+            fi
+          done
+
+          N=$(count_dist 'pk_gh_token')
+          if [ "$N" -eq 0 ]; then
+            echo "FAIL dist/ pk_gh_token = 0 (要求 >0，t019 密钥录入 UI 缺失)"
+            FAIL=1
+          else
+            echo "PASS dist/ pk_gh_token = $N (>0，t019 密钥录入 UI 在)"
+          fi
+
+          if [ "$FAIL" -ne 0 ]; then
+            echo "::error::产物断言失败：拒绝部署错误口味/泄漏密钥的产物"
+            exit 1
+          fi
+          echo "PASS 全部产物断言通过：GitHub 引擎 + 无旧口味 + 无密钥 + t019 UI 在"
 
       - name: Deploy to gh-pages
         uses: peaceiris/actions-gh-pages@v4

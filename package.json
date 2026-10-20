@@ -9,6 +9,7 @@
   "test": "vitest run",
   "build:lan": "node scripts/build-lan.mjs",
   "build:cloud": "node scripts/build-cloud.mjs",
+  "preflight": "node scripts/predeploy-check.mjs",
   "sync-server": "node server/sync-server.mjs",
   "preview": "vite preview"
  },
