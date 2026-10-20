@@ -32,6 +32,38 @@ describe('B1 pickRowMap / 字段往返', () => {
     expect(er.some(([l, c]) => l === 'updatedAt' && c === 'updated_at')).toBe(true)
     const dc = pickRowMap('daily_checkins').fields
     expect(dc.some(([l, c]) => l === 'completedAt' && c === 'completed_at')).toBe(true)
+    // C2：课表可选备注字段已注册进单一 ROW_MAP
+    const wt = pickRowMap('weekly_tasks').fields
+    expect(wt.some(([l, c]) => l === 'bookNote' && c === 'book_note')).toBe(true)
+    expect(wt.some(([l, c]) => l === 'pickupNote' && c === 'pickup_note')).toBe(true)
+  })
+
+  it('C2 weekly_tasks 的 bookNote/pickupNote 往返；缺省不写键，老行不报错', () => {
+    const base = {
+      uid: 'wt-1', id: 'wt-1', weekday: 1, timeSlot: '16:30-17:00', name: '阅读',
+      points: 1, category: '阅读', sortOrder: 10, isActive: true, createdAt: T0, updatedAt: T0
+    }
+    // 缺省（老行）：toCloud / fromCloud 都不凭空造字段
+    const cloudOld = toCloud('weekly_tasks', base)
+    expect('book_note' in cloudOld).toBe(false)
+    expect('pickup_note' in cloudOld).toBe(false)
+    const backOld = fromCloud('weekly_tasks', cloudOld)
+    expect('bookNote' in backOld).toBe(false)
+    expect('pickupNote' in backOld).toBe(false)
+
+    // 有值：双向往返不丢
+    const withNotes = { ...base, bookNote: '语文书 + 数学练习册', pickupNote: '奶奶 16:30 校门口' }
+    const cloud = toCloud('weekly_tasks', withNotes)
+    expect(cloud.book_note).toBe('语文书 + 数学练习册')
+    expect(cloud.pickup_note).toBe('奶奶 16:30 校门口')
+    const back = fromCloud('weekly_tasks', cloud)
+    expect(back.bookNote).toBe('语文书 + 数学练习册')
+    expect(back.pickupNote).toBe('奶奶 16:30 校门口')
+
+    // 真实老云端行（无字段）读入不报错且不带键
+    const legacy = fromCloud('weekly_tasks', { id: 'legacy-9', weekday: 2, name: '写字课', time_slot: '18:00-20:00' })
+    expect(legacy.name).toBe('写字课')
+    expect('bookNote' in legacy).toBe(false)
   })
 
   it('checkins 的 homeworkId/homeworkIndex/subject/minutes/note 经 toCloud→fromCloud 不丢', () => {

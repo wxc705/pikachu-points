@@ -22,6 +22,12 @@
 //
 // weekday: 1=周一 ... 7=周日
 
+// C2：weekly_tasks 行可选备注字段结构（只声明结构，不改任何既有课表内容）
+// - bookNote: 带什么书（字符串；缺省 = 不写键）
+// - pickupNote: 接送安排（字符串；缺省 = 不写键）
+// 种子行刻意不带这两个键；家长端留空保存时也会删除键，老数据零迁移。
+export const WEEKLY_TASK_OPTIONAL_FIELDS = ['bookNote', 'pickupNote']
+
 export const WEEKLY_TASKS_SEED = [
   // ================= 周一 =================
   { weekday: 1, timeSlot: '16:30-17:00', name: '体能训练', points: 1, category: '体能', sortOrder: 10 },

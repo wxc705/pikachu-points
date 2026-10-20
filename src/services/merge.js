@@ -84,6 +84,9 @@ const TABLE_MAPS = {
       ['isActive', 'is_active'],
       ['once', 'once'],
       ['skips', 'skips'],
+      // C2 可选备注：老行/留空时键不存在 → toCloud/fromCloud 自动跳过，零迁移
+      ['bookNote', 'book_note'],
+      ['pickupNote', 'pickup_note'],
       ['createdAt', 'created_at', 'ts'],
       ['updatedAt', 'updated_at', 'ts'],
       ['deletedAt', 'deleted_at', 'ts']

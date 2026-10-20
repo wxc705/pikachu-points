@@ -33,6 +33,8 @@
  v-for="g in groups"
  :key="g.w"
  class="rounded-2xl bg-surface shadow-sm p-4 card-lift"
+ :data-weekday="g.w"
+ :data-is-today="g.isToday ? '1' : '0'"
  >
  <h2 class="text-sm font-bold text-ink-soft mb-2">
  {{ g.label }}
@@ -48,8 +50,10 @@
  <li
  v-for="t in g.active"
  :key="t.id"
- class="py-2 flex items-center gap-2 bg-white rounded-xl p-3 mb-1"
+ class="py-2 bg-white rounded-xl p-3 mb-1"
+ data-testid="weekly-task-row"
  >
+ <div class="flex items-center gap-2">
  <div class="flex-1 min-w-0">
  <p class="font-medium text-sm truncate">{{ t.timeSlot }} ｜ {{ t.name }}</p>
  <p class="text-xs text-ink-soft">+{{ t.points }} 分</p>
@@ -89,6 +93,30 @@
  >
  ✕
  </button>
+ </div>
+ <!-- C2：每行可直接编辑「带什么书 / 接送安排」；留空保存会删除键，不写空值 -->
+ <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
+ <label class="block">
+ <span class="text-[11px] text-ink-soft">📚 带什么书</span>
+ <input
+ :value="t.bookNote || ''"
+ @change="saveWeeklyNote(t, 'bookNote', $event)"
+ placeholder="带什么书？留空不显示"
+ class="w-full bg-primary-soft/40 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary"
+ data-testid="weekly-task-bookNote"
+ />
+ </label>
+ <label class="block">
+ <span class="text-[11px] text-ink-soft">🚗 接送安排</span>
+ <input
+ :value="t.pickupNote || ''"
+ @change="saveWeeklyNote(t, 'pickupNote', $event)"
+ placeholder="接送：谁来接 / 几点接？留空不显示"
+ class="w-full bg-primary-soft/40 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary"
+ data-testid="weekly-task-pickupNote"
+ />
+ </label>
+ </div>
  </li>
  </ul>
  <!-- 已停用：排在组内末尾，灰色 + 恢复 -->
@@ -96,8 +124,9 @@
  <li
  v-for="t in g.inactive"
  :key="t.id"
- class="py-2 flex items-center gap-2 bg-white rounded-xl p-3 mb-1 opacity-50"
+ class="py-2 bg-white rounded-xl p-3 mb-1 opacity-50"
  >
+ <div class="flex items-center gap-2">
  <div class="flex-1 min-w-0">
  <p class="font-medium text-sm truncate line-through">{{ t.timeSlot }} ｜ {{ t.name }}</p>
  <p class="text-xs text-ink-soft">+{{ t.points }} 分 · 已停用</p>
@@ -116,6 +145,21 @@
  >
  ✕
  </button>
+ </div>
+ <div class="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
+ <input
+ :value="t.bookNote || ''"
+ @change="saveWeeklyNote(t, 'bookNote', $event)"
+ placeholder="带什么书？留空不显示"
+ class="w-full bg-primary-soft/40 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary"
+ />
+ <input
+ :value="t.pickupNote || ''"
+ @change="saveWeeklyNote(t, 'pickupNote', $event)"
+ placeholder="接送：谁来接 / 几点接？留空不显示"
+ class="w-full bg-primary-soft/40 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-primary"
+ />
+ </div>
  </li>
  </ul>
  <p v-if="!g.active.length && !g.inactive.length" class="text-xs text-ink-soft py-2">暂无闯关</p>
@@ -432,6 +476,7 @@
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
 import { usePointsStore } from '../stores/points.js'
+import { putWeeklyTask } from '../services/db.js'
 import { WEEKDAYS, dateToWeekday } from '../utils/weekday.js'
 
 const store = usePointsStore()
@@ -500,6 +545,25 @@ async function toggleTask(t) {
 async function deleteTask(t) {
  if (!confirm('确认删除闯关项？')) return
  await store.deleteWeeklyTaskItem(t.id)
+}
+
+// C2：行内保存 bookNote / pickupNote。留空 = 从行里删除该键（不是写空串），
+// 老行天然无键，toCloud 会跳过 undefined，云端也不会出现空字段。
+async function saveWeeklyNote(t, field, event) {
+ const raw = event && event.target ? event.target.value : ''
+ const val = String(raw || '').trim()
+ const row = { ...t, updatedAt: Date.now() }
+ if (val) row[field] = val
+ else delete row[field]
+ try {
+  await putWeeklyTask(row)
+  // 让 store.weeklyTasks 与 IndexedDB 同步刷新（复用现有 CRUD 链路）
+  await store.updateWeeklyTaskItem(t.id, {})
+  showMsg(val ? '✅ 已保存' : '✅ 已清空（该字段不写入）')
+ } catch (e) {
+  console.warn('[parent] save weekly note failed:', e)
+  showMsg('❌ 保存失败：' + (e && e.message ? e.message : '未知错误'))
+ }
 }
 
 const taskModal = reactive({

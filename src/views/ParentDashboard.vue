@@ -14,6 +14,18 @@
       </div>
     </section>
 
+    <!-- C2：🚗 接送安排（今日 pickupNote 汇总；无值不编造，显示待填写） -->
+    <section class="rounded-2xl bg-surface shadow-sm p-4 space-y-2" data-testid="pickup-card">
+      <h2 class="font-bold text-sm flex items-center gap-1.5">🚗 接送安排</h2>
+      <div v-if="todayPickupRows.length" class="space-y-2">
+        <div v-for="t in todayPickupRows" :key="'pickup-' + t.id" class="rounded-xl bg-primary-soft/40 p-3">
+          <p class="text-xs font-semibold text-ink-soft">{{ t.timeSlot }} · {{ t.name }}</p>
+          <p class="text-sm font-bold text-ink">{{ t.pickupNote }}</p>
+        </div>
+      </div>
+      <p v-else class="text-sm text-ink-soft" data-testid="pickup-empty">—（待家长填写）</p>
+    </section>
+
     <!-- 云同步 -->
     <section class="rounded-2xl bg-surface shadow-sm p-4 space-y-2.5">
       <div class="flex items-center justify-between">
@@ -76,15 +88,47 @@
         ⏳ 待确认兑换（{{ pendingRequests.length }}）
       </h2>
       <ul class="space-y-2">
-        <li v-for="r in pendingRequests" :key="r.id" class="flex items-center justify-between gap-2 p-3 rounded-xl bg-white shadow-sm">
+        <li
+          v-for="r in pendingRequests"
+          :key="r.id"
+          class="flex items-center justify-between gap-2 p-3 rounded-xl bg-white shadow-sm"
+          data-testid="pending-row"
+          :data-request-id="r.id"
+        >
           <div class="flex-1 min-w-0">
             <p class="font-semibold text-sm truncate">{{ r.reward }}</p>
             <p class="text-xs text-ink-soft">扣 {{ r.pointsCost }} 分 · {{ r.date }}</p>
           </div>
           <div class="flex gap-1.5 shrink-0">
-            <button @click="decide(r.id, 'approved')" class="w-10 h-10 rounded-full bg-green-500 text-white font-bold hover:bg-green-600 transition-colors btn-press">✓</button>
-            <button @click="decide(r.id, 'rejected')" class="w-10 h-10 rounded-full bg-gray-200 text-gray-500 font-bold hover:bg-gray-300 transition-colors btn-press">✗</button>
+            <button
+              @click="decidePending(r, 'approved')"
+              :disabled="deciding.has(r.id)"
+              data-testid="pending-approve"
+              class="w-10 h-10 rounded-full bg-green-500 text-white font-bold hover:bg-green-600 disabled:opacity-40 transition-colors btn-press"
+            >✓</button>
+            <button
+              @click="decidePending(r, 'rejected')"
+              :disabled="deciding.has(r.id)"
+              data-testid="pending-reject"
+              class="w-10 h-10 rounded-full bg-gray-200 text-gray-500 font-bold hover:bg-gray-300 disabled:opacity-40 transition-colors btn-press"
+            >✗</button>
           </div>
+        </li>
+      </ul>
+    </section>
+
+    <!-- C3：连续审批的本地即时回执（不刷新浏览器，逐条可见） -->
+    <section v-if="approvalLog.length" class="rounded-2xl bg-white/70 border border-green-100 p-3" data-testid="approval-log">
+      <p class="text-xs font-semibold text-ink-soft mb-1.5">最近审批（{{ approvalLog.length }}）</p>
+      <ul class="space-y-1">
+        <li
+          v-for="a in approvalLog"
+          :key="a.id"
+          :data-status="a.status"
+          class="text-xs font-medium flex items-center gap-1.5"
+        >
+          <span>{{ a.status === 'approved' ? '✅' : '❌' }}</span>
+          <span class="truncate">{{ a.reward }}</span>
         </li>
       </ul>
     </section>
@@ -202,7 +246,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, ref } from 'vue'
 import { usePointsStore } from '../stores/points.js'
 import { playError, playCoin } from '../services/sound.js'
 import { useExchangeDecide } from '../composables/useExchangeDecide.js'
@@ -225,8 +269,56 @@ const hwEditing = ref(false)
 const hwSaving = ref(false)
 const hwMsg = ref('')
 
-const pendingRequests = computed(() => store.requests.filter((r) => r.status === 'pending'))
+// C3：审批走「本地乐观隐藏 + store 落库」，点完立刻轮到下一条，无需刷新/等待
+const deciding = ref(new Set()) // 正在提交的 request id（防重复请求）
+const localDecided = ref({}) // id -> status：决定后立即从待审列表移除
+const approvalLog = ref([]) // 最近审批回执（证明连续 3 条都落库）
+const pendingRequests = computed(() =>
+  store.requests.filter((r) => r.status === 'pending' && !localDecided.value[r.id])
+)
 const todayCheckins = computed(() => store.checkins.filter((c) => c.date === store.today))
+
+function scrollNextPending() {
+  const nextRow = document.querySelector('[data-testid="pending-row"]')
+  if (nextRow && nextRow.scrollIntoView) {
+    nextRow.scrollIntoView({ block: 'center', behavior: 'smooth' })
+  }
+}
+
+async function decidePending(r, status) {
+  if (!r || deciding.value.has(r.id)) return
+  deciding.value = new Set(deciding.value).add(r.id)
+  // 原地即时更新：该行从待审列表消失，下一条顶上来（不依赖 store 刷新时序）
+  localDecided.value = { ...localDecided.value, [r.id]: status }
+  approvalLog.value = [{ id: r.id, reward: r.reward, status }, ...approvalLog.value].slice(0, 10)
+  await nextTick()
+  scrollNextPending()
+  try {
+    await decide(r.id, status)
+    // 落库成功：store 已是 approved/rejected，撤掉乐观遮罩（后续云端若真的重新
+    // 变回 pending，也能再次显示，不被本地缓存永久隐藏）
+    const done = { ...localDecided.value }
+    delete done[r.id]
+    localDecided.value = done
+    await nextTick()
+    scrollNextPending()
+  } catch (e) {
+    // 落库失败才回滚，不静默丢状态
+    const copy = { ...localDecided.value }
+    delete copy[r.id]
+    localDecided.value = copy
+    approvalLog.value = approvalLog.value.filter((a) => a.id !== r.id)
+    console.warn('[parent] decide failed:', e)
+  } finally {
+    const next = new Set(deciding.value)
+    next.delete(r.id)
+    deciding.value = next
+  }
+}
+// C2：今日接送安排（只汇总有值的行；空态显示「—（待家长填写）」，不显示 0 条）
+const todayPickupRows = computed(() =>
+  store.todayTasks.filter((t) => String(t.pickupNote || '').trim())
+)
 
 const quickActions = [
   { to: '/rating', label: '学习评分', icon: Star },

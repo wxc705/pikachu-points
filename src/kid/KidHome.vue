@@ -1,5 +1,8 @@
 <template>
   <div class="kid-page">
+    <!-- C1：随机角色短入场（≤1s，可跳过，同会话只播一次） -->
+    <KidIntro />
+
     <!-- t019 主屏壁纸：今日角色三件套之一（ultraSeq 与今日视图同源），垫底不挡交互 -->
     <div class="kid-wall" :style="{ backgroundImage: `url(./ultraman/seq/${ultraChar.key}/${ultraChar.wall})` }"></div>
 
@@ -122,6 +125,7 @@ import { isSyncEngineConfigured } from '../services/githubSync.js'
 import { playCoin, unlockAudio } from '../services/sound.js'
 import { getCharToday } from '../services/ultraSeq.js'
 import CoinBurst from '../components/CoinBurst.vue'
+import KidIntro from '../components/KidIntro.vue'
 import './kid-style.css'
 
 const store = usePointsStore()

@@ -1,5 +1,8 @@
 <template>
   <div class="tt-page" :class="{ 'tt-page--sidebar': isWide }">
+    <!-- C1：随机角色短入场（≤1s，可跳过，同会话只播一次） -->
+    <KidIntro />
+
     <!-- 角色壁纸：三件套之一，半透明垫最底层（pointer-events 不挡交互） -->
     <div class="tt-wall" :style="{ backgroundImage: `url(./ultraman/seq/${ultraChar.key}/${ultraChar.wall})` }"></div>
     <!-- 左侧导航栏（宽屏 ≥769px：桌面+iPad 横版统一显示，同设计稿） -->
@@ -28,6 +31,11 @@
       <button class="sb-item" :class="{ 'is-active': activeTab === 'settings' }" @click="activeTab = 'settings'">
         <span class="sb-item-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg></span>
         设置
+      </button>
+      <!-- C2：宽屏侧栏「今天带什么」入口（点击定位到主区卡片） -->
+      <button class="sb-item sb-books" data-testid="books-entry-sidebar" @click="openBooks">
+        <span class="sb-item-icon" aria-hidden="true">📚</span>
+        <span class="sb-books-label">今天<br />带什么</span>
       </button>
       <div class="sb-spacer"></div>
       <a class="sb-item sb-parent" href="#/">
@@ -209,6 +217,19 @@
           </div>
         </div>
 
+        <!-- C2：📚 今天带什么（列出今日任务里 bookNote 有值的行；无值显示待填写） -->
+        <div ref="booksCard" class="tt-books-card" data-testid="books-card">
+          <h3 class="tt-books-title">📚 今天带什么</h3>
+          <div v-if="bookRows.length" class="tt-books-list">
+            <div v-for="t in bookRows" :key="'book-' + t.id" class="tt-books-row">
+              <span class="tt-books-name">{{ t.name }}</span>
+              <span class="tt-books-time">{{ slotLabel(t.timeSlot) }}</span>
+              <span class="tt-books-note" data-testid="book-note">{{ t.bookNote }}</span>
+            </div>
+          </div>
+          <p v-else class="tt-books-empty" data-testid="books-empty">—（待家长填写）</p>
+        </div>
+
         <!-- 今日时间段（设计稿：settings-card 在双栏下方，主页面常驻） -->
         <div class="tt-settings-card">
           <h3 class="tt-settings-title">
@@ -385,6 +406,12 @@
     </main>
     </div><!-- /tt-main-area -->
 
+    <!-- C2：窄屏底部「今天带什么」卡片（点击定位到主区卡片） -->
+    <button v-if="!isWide" class="tt-books-bottom" data-testid="books-entry-bottom" @click="openBooks">
+      <span class="tt-books-bottom-title">📚 今天带什么</span>
+      <span class="tt-books-bottom-state">{{ bookRows.length ? bookRows.length + ' 项' : '—（待家长填写）' }}</span>
+    </button>
+
     <!-- 底部导航：手机竖版用（iPad 用左侧栏） -->
     <nav v-if="!isWide" class="tt-tabs">
       <button class="tt-tab" :class="{ 'is-active': activeTab === 'today' }" @click="activeTab = 'today'">📋 冒险</button>
@@ -472,7 +499,7 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { usePointsStore } from '../stores/points.js'
 import { dateToWeekday, WEEKDAYS } from '../utils/weekday.js'
@@ -482,6 +509,7 @@ import { speakEncouragement, speakAllDone, speakText, warmUpVoice } from '../ser
 import HeroSection from '../components/HeroSection.vue'
 import SpeechBubble from '../components/SpeechBubble.vue'
 import AllDoneEffect from '../components/AllDoneEffect.vue'
+import KidIntro from '../components/KidIntro.vue'
 import './kid-style.css'
 
 const store = usePointsStore()
@@ -491,6 +519,18 @@ function openMap() {
 }
 
 const activeTab = ref('today')
+// C2：今日有 bookNote 的任务行（无值为空 → 卡片显示「—（待家长填写）」而不是 0 条）
+const bookRows = computed(() =>
+  store.todayTasks.filter((t) => String(t.bookNote || '').trim())
+)
+const booksCard = ref(null)
+async function openBooks() {
+  activeTab.value = 'today'
+  await nextTick()
+  if (booksCard.value && booksCard.value.scrollIntoView) {
+    booksCard.value.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }
+}
 const loading = ref(true)
 const confirmTask = ref(null)
 const submitting = ref(false)
@@ -1424,4 +1464,28 @@ onBeforeUnmount(() => {
   color: #fff; font-weight: 800;
   background: rgba(255,255,255,.15); border-radius: 12px;
 }
+
+/* ============================================================
+   C2：📚 今天带什么 — 半透明卡片 + 大字号 + 空态待填写
+   ============================================================ */
+.tt-books-card {
+  background: rgba(255,255,255,.85); border-radius: 20px; padding: 18px 20px;
+  border: 2px solid #e0e7ff; box-shadow: 0 2px 12px rgba(79,70,229,.05);
+  backdrop-filter: blur(8px); display: flex; flex-direction: column; gap: 10px;
+}
+.tt-books-title { font-size: 26px; font-weight: 900; color: #4f46e5; margin: 0; display: flex; align-items: center; gap: 8px; }
+.tt-books-list { display: flex; flex-direction: column; gap: 8px; }
+.tt-books-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 12px 14px; border-radius: 14px; background: rgba(238,242,255,.7); border: 2px solid #e0e7ff; }
+.tt-books-name { font-size: 20px; font-weight: 800; color: #1a1a2e; }
+.tt-books-time { font-size: 16px; font-weight: 800; color: #6366f1; background: #eef2ff; padding: 2px 10px; border-radius: 99px; }
+.tt-books-note { flex: 1 0 100%; font-size: 22px; font-weight: 700; color: #334155; }
+.tt-books-empty { font-size: 22px; font-weight: 700; color: #94a3b8; text-align: center; padding: 14px 0; margin: 0; }
+/* 宽屏侧栏入口：侧栏窄，做成两行大点击区（≥96px 高） */
+.sb-books { min-height: 96px; flex-direction: column; justify-content: center; gap: 2px; background: rgba(255,255,255,.1); margin-top: 6px; padding: 10px 4px; text-align: center; }
+.sb-books-label { font-size: 14px; line-height: 1.12; font-weight: 800; }
+/* 窄屏底部卡片：≥96px 高、大字号、按压反馈 */
+.tt-books-bottom { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: calc(100% - 20px); margin: 0 10px 8px; min-height: 96px; padding: 14px 20px; border-radius: 20px; border: 2px solid #e0e7ff; background: rgba(255,255,255,.92); color: #1a1a2e; font-family: inherit; cursor: pointer; box-shadow: 0 2px 12px rgba(79,70,229,.06); backdrop-filter: blur(8px); }
+.tt-books-bottom:active { transform: scale(.97); }
+.tt-books-bottom-title { font-size: 26px; font-weight: 900; color: #4f46e5; }
+.tt-books-bottom-state { font-size: 20px; font-weight: 800; color: #94a3b8; text-align: right; }
 </style>
