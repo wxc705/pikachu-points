@@ -164,6 +164,8 @@ export const usePointsStore = defineStore('points', () => {
  // 连胜（QC 2026-09-23：只有「奥特曼变身」= 当天进度打满才算；拨付/罚分/单纯打卡不续）
  // morphDays 存 store ref 保证反应性（变身当刻 hero 立即跳数）
  const morphDays = ref(getMorphDays())
+ // 今天是否已经变身（Hero 文案完成态依据；morphDays 是唯一真源，禁止另存标记）
+ const morphedToday = computed(() => morphDays.value.includes(today.value))
  const currentStreak = computed(() => {
   const days = morphDays.value
   if (!days.length) return 0
@@ -966,6 +968,7 @@ export const usePointsStore = defineStore('points', () => {
  todayCheckedProjectIds,
  todayProjectCounts,
  currentStreak,
+ morphedToday,
  markMorphDay,
  load,
  refresh,

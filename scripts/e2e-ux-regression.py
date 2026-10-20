@@ -18,12 +18,13 @@ import subprocess
 import sys
 import time
 from datetime import date
+from urllib.parse import urlparse
 from urllib.request import urlopen
 
 from playwright.sync_api import sync_playwright
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-BASE = "http://127.0.0.1:5173"
+BASE = os.environ.get("BASE", "http://127.0.0.1:5173")
 RESULTS = []
 DEV_PROC = None
 
@@ -121,10 +122,13 @@ def server_up():
 def ensure_server():
     global DEV_PROC
     if server_up():
-        print("[e2e] reuse dev server on 5173")
+        print(f"[e2e] reuse dev server at {BASE}")
         return
-    print("[e2e] starting dev server on 5173 ...")
-    cmd = "npm run dev -- --host 127.0.0.1 --port 5173"
+    u = urlparse(BASE)
+    host = u.hostname or "127.0.0.1"
+    port = u.port or 5173
+    print(f"[e2e] starting dev server at {BASE} ...")
+    cmd = f"npm run dev -- --host {host} --port {port}"
     DEV_PROC = subprocess.Popen(
         cmd,
         cwd=ROOT,
@@ -328,6 +332,86 @@ def test_subj_tag_positive(ctx, errors):
     page.close()
 
 
+ULTRA_NAMES = ("初代", "迪迦", "艾克斯", "泽塔", "赛罗", "诺亚")
+
+
+def complete_all_today_tasks(page):
+    """勾完今日所有任务卡（作业卡直接打卡，拓展卡走确认弹窗）。"""
+    total = page.locator(".tt-task").count()
+    for i in range(total):
+        card = page.locator(".tt-task").nth(i)
+        if "is-done" in (card.get_attribute("class") or ""):
+            continue
+        card.click()
+        page.wait_for_timeout(200)
+        yes = page.locator(".tt-confirm-overlay .tt-confirm-yes")
+        if yes.count() > 0 and yes.first.is_visible():
+            yes.first.click()
+        page.wait_for_function(
+            "(i) => { const el = document.querySelectorAll('.tt-task')[i];"
+            " return !!el && el.classList.contains('is-done') }",
+            arg=i,
+            timeout=8000
+        )
+
+
+def test_level_progress_semantics(ctx, errors):
+    """Run F：等级文案=下一个未达到阈值；并列每日形态目标；打满后完成态。"""
+    # 全新 context = 空 localStorage + 空 IndexedDB，等价新账号（morphDays=0、连续 0 天）
+    fresh = ctx.browser.new_context()
+    block_offorigin(fresh)
+    page = new_page(fresh, errors, (1280, 800))
+    page.goto(BASE + "/#/kid/today", wait_until="domcontentloaded", timeout=30000)
+    page.wait_for_selector(".tt-task", timeout=20000)
+    page.wait_for_selector(".hero-progress-text", timeout=15000)
+    page.wait_for_timeout(400)
+
+    level_text = page.locator(".hero-progress-text").inner_text()
+    check(
+        "level-f1: 新账号文案=「差 1 天升级」且不含「差 3 天」",
+        "差 1 天升级" in level_text and "差 3 天" not in level_text,
+        level_text
+    )
+
+    hint = page.locator("[data-testid=morph-hint]")
+    hint_text = hint.inner_text()
+    real_name = next((n for n in ULTRA_NAMES if n in hint_text), "")
+    visible_wide = hint.is_visible()
+    page.set_viewport_size({"width": 375, "height": 700})
+    page.wait_for_timeout(250)
+    visible_narrow = hint.is_visible()
+    page.set_viewport_size({"width": 1280, "height": 800})
+    page.wait_for_timeout(200)
+    check(
+        "level-f2: 文案含「今天打满」+真实形态名，手机/宽屏均可见",
+        "今天打满" in hint_text and real_name != "" and visible_wide and visible_narrow,
+        f"{hint_text} | name={real_name} wide={visible_wide} narrow={visible_narrow}"
+    )
+
+    complete_all_today_tasks(page)
+    morph = page.locator(".tt-morph-overlay")
+    try:
+        morph.wait_for(state="visible", timeout=5000)
+        morph_ok = True
+    except Exception:
+        morph_ok = False
+    check("level-f2: 全勾完自动出现变身（无需家长确认）", morph_ok)
+
+    page.wait_for_function(
+        "() => { const el = document.querySelector('[data-testid=morph-hint]');"
+        " return !!el && el.textContent.includes('今天已变身') }",
+        timeout=5000
+    )
+    done_text = hint.inner_text()
+    check(
+        "level-f2: 打满后文案为完成态并提到下一个形态名",
+        "今天已变身" in done_text and "迪迦" in done_text and "undefined" not in done_text,
+        done_text
+    )
+    page.close()
+    fresh.close()
+
+
 def seed_data(page, today, wd):
     page.goto(BASE + "/#/parent", wait_until="domcontentloaded", timeout=30000)
     page.wait_for_selector("[data-testid=pickup-card]", timeout=20000)
@@ -366,6 +450,7 @@ def main():
             run_case("books", lambda: test_books_empty_and_positive(ctx, errors, wd))
             run_case("approvals", lambda: test_parent_approvals(ctx, errors))
             run_case("subj-tag", lambda: test_subj_tag_positive(ctx, errors))
+            run_case("level-progress", lambda: test_level_progress_semantics(ctx, errors))
 
             browser.close()
     finally:

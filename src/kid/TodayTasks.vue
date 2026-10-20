@@ -57,6 +57,8 @@
         :level-progress="levelProgress"
         :level-next-days="levelNextDays"
       />
+      <!-- 每日形态轮换（今天打满 → 明天变成谁），紧贴 Hero 升级条下方，与等级阈值是两套并存语义 -->
+      <div v-if="morphHint" class="tt-morph-next-hint" data-testid="morph-hint">{{ morphHint }}</div>
 
       <!-- 时间条（设计稿：始终显示） -->
       <div class="tt-time-bar" v-if="currentTimelineSlot">
@@ -504,7 +506,7 @@ import { useRouter } from 'vue-router'
 import { usePointsStore } from '../stores/points.js'
 import { dateToWeekday, WEEKDAYS } from '../utils/weekday.js'
 import { playCoin, unlockAudio } from '../services/sound.js'
-import { getCharToday } from '../services/ultraSeq.js'
+import { getCharToday, ULTRA_CHARS } from '../services/ultraSeq.js'
 import { speakEncouragement, speakAllDone, speakText, warmUpVoice } from '../services/voice.js'
 import HeroSection from '../components/HeroSection.vue'
 import SpeechBubble from '../components/SpeechBubble.vue'
@@ -771,15 +773,20 @@ const levelLabel = computed(() => {
   return `奥特曼 Lv.${ultramanLevel.value}`
 })
 // 触发已改为「当天进度打满」（QC 规则，watch 移到 dailyProgress 定义之后注册）
-const LEVEL_THRESHOLDS = [0, 1, 3, 7, 14, 30] // 索引 0-5
+const LEVEL_THRESHOLDS = [1, 3, 7, 14, 30] // 阶段等级阈值（连续变身天数），不含 0 起点
+// 下一个未达到的阈值：s=0→1 / 1→3 / 3→7 / 7→14 / 14→30 / 30→已满级
+const levelNextThreshold = computed(() => LEVEL_THRESHOLDS.find((t) => t > streak.value))
 // 升级进度 = 连续变身天数（v4升级逻辑：中断回退到上一天等级，1/3/7/14/30天；QC：只有变身才算连胜）
+// 当前区间 = 已跨过的最高阈值（s=0 时为 0），与文案共用 levelNextThreshold，禁止各算各的
 const levelProgress = computed(() => {
   const s = streak.value
-  const lv = ultramanLevel.value
-  if (lv >= 5) return 100
-  const current = LEVEL_THRESHOLDS[lv] || 0
-  const next = LEVEL_THRESHOLDS[lv + 1] || 30
-  // clamp：streak 可能低于当前等级阈值（如 lv=1 但 s=0），避免负数进度
+  const next = levelNextThreshold.value
+  if (!next) return 100
+  let current = 0
+  for (const t of LEVEL_THRESHOLDS) {
+    if (t <= s) current = t
+    else break
+  }
   return Math.max(0, Math.min(100, Math.round(((s - current) / (next - current)) * 100)))
 })
 
@@ -801,12 +808,21 @@ watch([dailyDone, dailyTotal], () => {
   }
 })
 const levelNextDays = computed(() => {
-  const s = streak.value
-  const lv = ultramanLevel.value
-  if (lv >= 5) return '已满级'
-  const next = LEVEL_THRESHOLDS[lv + 1] || 30
-  const diff = next - s
-  return `差 ${diff} 天升级`
+  const next = levelNextThreshold.value
+  if (!next) return '已满级'
+  return `差 ${next - streak.value} 天升级`
+})
+
+// 每日形态轮换文案（与等级阈值是两套并存语义）：当前指针的下一个角色，读 ultraSeq 导出序列计算
+// 已是最后一个 → 取模回到第一个（例：诺亚 → 下一轮「初代」），不出现 undefined
+const nextUltraChar = computed(() => {
+  const i = ULTRA_CHARS.findIndex((c) => c.key === ultraChar.key)
+  return ULTRA_CHARS[(i + 1) % ULTRA_CHARS.length] || ULTRA_CHARS[0]
+})
+const morphHint = computed(() => {
+  const nextName = nextUltraChar.value ? nextUltraChar.value.name : '下一轮'
+  if (store.morphedToday) return `✅ 今天已变身，明天换「${nextName}」`
+  return `今天打满 → 明天变身「${nextName}」`
 })
 
 // v4.1: 奥特曼 emoji 映射
@@ -1165,6 +1181,8 @@ onBeforeUnmount(() => {
 /* tt-body 无规则时 flex-column 父容器下宽度按固有内容收缩(497px) → 显式拉满 */
 .tt-body { width:100%;min-width:0 }
 .tt-main-area { flex:1;display:flex;flex-direction:column;min-width:0;overflow-y:auto;padding:20px 24px;gap:16px }
+/* 每日形态轮换提示：紧贴 Hero 升级条下方，手机/宽屏都整行常显，字号不小于 hero 文案 */
+.tt-morph-next-hint { font-size:15px;font-weight:800;line-height:1.5;color:#6d28d9;padding:0 4px;margin-top:-8px }
 /* ============================================================
    v4.1: 时间条
    ============================================================ */
