@@ -1,0 +1,77 @@
+{
+  "version": 1,
+  "updated": "2026-10-08",
+  "readOnly": true,
+  "source": "docs-knowledge-graph-v1.md §2.2 数据模型 + §2.3 节点树图示（Phase B B-lite seed）",
+  "provenance": {
+    "node_names": "全部取自 docs-knowledge-graph-v1.md 的节点树/数据模型示例，未编造任何教材内容",
+    "status": "取自 §2.3 两张状态图示（🟢🔵🟡⚪🔒 映射 mastered/learning/weak/not_started/locked）",
+    "numbers": "仅收录文档明确给出的数值（拼音单元与声母/韵母示例）；文档未给的一律 null（前端显示「待维护」）",
+    "todo": "课文(一)~(四)/识字(二) 的课名单、数学各单元子知识点、第3课《江南》归属——文档缺失或冲突，已列 TODO 待 Nate/QC 补，不猜"
+  },
+  "statusLabels": {
+    "mastered": "已掌握",
+    "learning": "学习中",
+    "weak": "薄弱",
+    "not_started": "未开始",
+    "locked": "未解锁"
+  },
+  "subjects": {
+    "chinese": {
+      "name": "语文",
+      "icon": "📖",
+      "nodes": [
+        {
+          "id": "cn-pinyin",
+          "name": "拼音",
+          "type": "unit",
+          "status": "learning",
+          "mastery": 60,
+          "practice_count": 12,
+          "error_count": 3,
+          "children": [
+            { "id": "cn-pinyin-shengmu", "name": "声母23个", "type": "point", "status": "mastered", "mastery": 80, "practice_count": null, "error_count": 1, "children": [] },
+            { "id": "cn-pinyin-yunmu", "name": "韵母24个", "type": "point", "status": "weak", "mastery": 50, "practice_count": null, "error_count": 2, "children": [] }
+          ]
+        },
+        {
+          "id": "cn-shizi1",
+          "name": "识字(一)",
+          "type": "unit",
+          "status": "mastered",
+          "mastery": null,
+          "practice_count": null,
+          "error_count": null,
+          "children": [
+            { "id": "cn-shizi1-tiandi", "name": "天地人", "type": "lesson", "status": "mastered", "mastery": null, "practice_count": null, "error_count": null, "children": [] },
+            { "id": "cn-shizi1-jinmu", "name": "金木水火土", "type": "lesson", "status": "mastered", "mastery": null, "practice_count": null, "error_count": null, "children": [] },
+            { "id": "cn-shizi1-kouer", "name": "口耳目", "type": "lesson", "status": "mastered", "mastery": null, "practice_count": null, "error_count": null, "children": [] },
+            { "id": "cn-shizi1-riyue", "name": "日月水火", "type": "lesson", "status": "weak", "mastery": null, "practice_count": null, "error_count": null, "children": [] },
+            { "id": "cn-shizi1-duiyun", "name": "对韵歌", "type": "lesson", "status": "not_started", "mastery": null, "practice_count": null, "error_count": null, "children": [] }
+          ]
+        },
+        { "id": "cn-ke1", "name": "课文(一)", "type": "unit", "status": "weak", "mastery": null, "practice_count": null, "error_count": null, "children": [] },
+        { "id": "cn-shizi2", "name": "识字(二)", "type": "unit", "status": "not_started", "mastery": null, "practice_count": null, "error_count": null, "children": [] },
+        { "id": "cn-ke2", "name": "课文(二)", "type": "unit", "status": "locked", "mastery": null, "practice_count": null, "error_count": null, "children": [] },
+        { "id": "cn-ke3", "name": "课文(三)", "type": "unit", "status": "locked", "mastery": null, "practice_count": null, "error_count": null, "children": [] },
+        { "id": "cn-ke4", "name": "课文(四)", "type": "unit", "status": "locked", "mastery": null, "practice_count": null, "error_count": null, "children": [] }
+      ]
+    },
+    "math": {
+      "name": "数学",
+      "icon": "🔢",
+      "nodes": [
+        { "id": "ma-shuyishu", "name": "数一数", "type": "unit", "status": "mastered", "mastery": null, "practice_count": null, "error_count": null, "children": [] },
+        { "id": "ma-biyibi", "name": "比一比", "type": "unit", "status": "mastered", "mastery": null, "practice_count": null, "error_count": null, "children": [] },
+        { "id": "ma-fenyifen", "name": "分一分", "type": "unit", "status": "mastered", "mastery": null, "practice_count": null, "error_count": null, "children": [] },
+        { "id": "ma-renweizhi", "name": "认位置", "type": "unit", "status": "mastered", "mastery": null, "practice_count": null, "error_count": null, "children": [] },
+        { "id": "ma-renshi10", "name": "认识10以内", "type": "unit", "status": "learning", "mastery": null, "practice_count": null, "error_count": null, "children": [] },
+        { "id": "ma-xingtu", "name": "认识图形", "type": "unit", "status": "mastered", "mastery": null, "practice_count": null, "error_count": null, "children": [] },
+        { "id": "ma-fenyuhe", "name": "分与合", "type": "unit", "status": "weak", "mastery": null, "practice_count": null, "error_count": null, "children": [] },
+        { "id": "ma-jia10", "name": "10以内加减", "type": "unit", "status": "not_started", "mastery": null, "practice_count": null, "error_count": null, "children": [] },
+        { "id": "ma-renshi1120", "name": "认识11-20", "type": "unit", "status": "locked", "mastery": null, "practice_count": null, "error_count": null, "children": [] },
+        { "id": "ma-jinwei20", "name": "20以内进位加", "type": "unit", "status": "locked", "mastery": null, "practice_count": null, "error_count": null, "children": [] }
+      ]
+    }
+  }
+}
